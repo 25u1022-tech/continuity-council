@@ -1,0 +1,197 @@
+@import "./theme/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--cc-canvas);
+    color: var(--cc-text-primary);
+    font-feature-settings: "cv11", "ss01";
+}
+
+code, pre, .font-mono {
+    font-family: "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        background-color: var(--cc-canvas);
+        color: var(--cc-text-primary);
+    }
+    ::selection {
+        background: rgba(0, 0, 0, 0.12);
+        color: inherit;
+    }
+    .dark ::selection {
+        background: rgba(255, 255, 255, 0.20);
+        color: #F5F5F7;
+    }
+}
+
+/* ---- Apple Minimal Layered Surface Helpers ---- */
+.cc-base {
+    background-color: var(--cc-canvas);
+    color: var(--cc-text-primary);
+}
+
+.cc-elev {
+    background-color: var(--cc-surface-elevated);
+    border-color: var(--cc-border);
+}
+
+.cc-card {
+    background-color: var(--cc-surface);
+    border: 1px solid var(--cc-border);
+    box-shadow: var(--cc-shadow-sm);
+    border-radius: var(--cc-radius-lg);
+    color: var(--cc-text-primary);
+}
+
+.cc-card:hover {
+    box-shadow: var(--cc-shadow-md);
+}
+
+.cc-hairline {
+    border: 1px solid var(--cc-border);
+}
+
+.cc-hairline-b {
+    border-bottom: 1px solid var(--cc-border);
+}
+
+.cc-hairline-t {
+    border-top: 1px solid var(--cc-border);
+}
+
+.text-primary-c {
+    color: var(--cc-text-primary);
+}
+
+.text-secondary-c {
+    color: var(--cc-text-secondary);
+}
+
+.text-tertiary-c {
+    color: var(--cc-text-tertiary);
+}
+
+.font-display {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+    letter-spacing: -0.022em;
+}
+
+.tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Motion: 200ms cubic-bezier(0.2, 0, 0, 1) ---- */
+.cc-transition {
+    transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+button {
+    transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+button:active {
+    transform: scale(0.985);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+    outline: 2px solid var(--cc-text-primary);
+    outline-offset: 2px;
+}
+
+/* Pulse animation for active status indicators */
+@keyframes cc-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+.cc-pulse-dot {
+    animation: cc-pulse 1.6s cubic-bezier(0.2, 0, 0, 1) infinite;
+}
+
+/* Soft ring pulse behind running agent */
+@keyframes cc-ring {
+    0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.15); }
+    70% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+.dark .cc-ring-pulse {
+    animation: cc-ring-dark 1.8s cubic-bezier(0.2, 0, 0, 1) infinite;
+}
+@keyframes cc-ring-dark {
+    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.25); }
+    70% { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+.cc-ring-pulse {
+    animation: cc-ring 1.8s cubic-bezier(0.2, 0, 0, 1) infinite;
+}
+
+/* Entrance */
+@keyframes cc-fade-up {
+    0% { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.cc-fade-up {
+    animation: cc-fade-up 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* Progress bar animation */
+@keyframes cc-bar-in {
+    0% { transform: scaleX(0); }
+    100% { transform: scaleX(1); }
+}
+.cc-bar-in {
+    transform-origin: left;
+    animation: cc-bar-in 450ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* Skeleton shimmer */
+@keyframes cc-shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+.cc-shimmer {
+    background: linear-gradient(90deg, var(--cc-surface-sunken) 25%, var(--cc-surface-hover) 37%, var(--cc-surface-sunken) 63%);
+    background-size: 400px 100%;
+    animation: cc-shimmer 1.4s ease infinite;
+    border-radius: var(--cc-radius-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cc-pulse-dot, .cc-ring-pulse, .cc-fade-up, .cc-shimmer, .cc-bar-in {
+        animation: none !important;
+    }
+    button:active { transform: none; }
+}
+
+/* Minimalist Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--cc-border);
+    border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--cc-text-quaternary);
+}

@@ -1,0 +1,162 @@
+"""Schedule Optimizer Agent.
+
+Deterministically generates 2-4 recovery options from the current schedule
+(scene moves, location swaps, holds), then asks Gemini to polish the option
+descriptions (deterministic fallback text if the LLM is unavailable).
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List
+
+from models import CaseState, RecoveryOption, SceneChange
+from services import gemini_client
+
+logger = logging.getLogger("continuity.agents.schedule")
+
+
+def _affected_scenes(case: CaseState, scenes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    d = case.disruption
+    day_scenes = [s for s in scenes if s["shoot_day"] == d.affected_day and s["status"] != "cancelled"]
+    if d.disruption_type in ("lead_actor_unavailable", "supporting_actor_unavailable"):
+        return [s for s in day_scenes if d.affected_cast_id in s["required_cast"]]
+    if d.disruption_type in ("location_unavailable", "permit_issue"):
+        return [s for s in day_scenes if s["location_id"] == d.affected_location_id]
+    # weather / equipment: whole day is at risk
+    return day_scenes
+
+
+def _later_day(case: CaseState, total_days: int) -> int:
+    return min(case.disruption.affected_day + 1, total_days)
+
+
+def generate_schedule_options(case: CaseState, bundle: Dict[str, Any]) -> List[RecoveryOption]:
+    """TRD Tool 2: `generate_schedule_options` — 2-4 recovery options with scene changes."""
+    scenes = bundle["scenes"]
+    total_days = bundle["production"]["total_shoot_days"]
+    d = case.disruption
+    affected = _affected_scenes(case, scenes)
+    case.affected_scene_ids = [s["scene_id"] for s in affected]
+    to_day = _later_day(case, total_days)
+
+    loc_by_id = {l["location_id"]: l for l in bundle["locations"]}
+
+    def mk_change(s: Dict[str, Any], new_day: int, new_loc: str = "") -> SceneChange:
+        return SceneChange(
+            scene_id=s["scene_id"], scene_title=s["scene_title"],
+            from_day=s["shoot_day"], to_day=new_day,
+            from_location=s["location_id"], to_location=new_loc or s["location_id"],
+            change_type="move_scene_day" if not new_loc or new_loc == s["location_id"] else "move_scene_location",
+        )
+
+    options: List[RecoveryOption] = []
+
+    # --- Option A: shoot cover scenes / unaffected work on the disrupted day ---
+    cover_pool = [
+        s for s in scenes
+        if s["shoot_day"] != d.affected_day
+        and s["scene_id"] not in case.affected_scene_ids
+        and (s["is_cover_scene"] or (
+            d.affected_cast_id and d.affected_cast_id not in s["required_cast"]
+        ))
+    ]
+    if affected:
+        changes = [mk_change(s, to_day) for s in affected]
+        pulled = []
+        for s in cover_pool[: max(1, len(affected) - 0)]:
+            if s["shoot_day"] > d.affected_day:
+                pulled.append(mk_change(s, d.affected_day))
+        options.append(RecoveryOption(
+            option_id="option_a",
+            name="Shoot cover scenes",
+            strategy="shoot_cover_scenes",
+            description=(
+                f"Keep Day {d.affected_day} shooting: pull cover/insert scenes forward and move the "
+                f"{len(affected)} affected scene(s) to Day {to_day}."
+            ),
+            scene_changes=changes + pulled,
+        ))
+
+    # --- Location disruption: move the blocked slate to an available location
+    if affected and d.disruption_type == "location_unavailable":
+        alternate = next(
+            (loc for loc in bundle["locations"]
+             if loc["location_id"] != d.affected_location_id
+             and any(a["location_id"] == loc["location_id"]
+                     and a["shoot_day"] == d.affected_day and a["available"]
+                     for a in bundle["location_availability"])),
+            None,
+        )
+        if alternate:
+            options.append(RecoveryOption(
+                option_id="option_location",
+                name="Move to alternate location",
+                strategy="swap_locations",
+                description=(
+                    f"Move the {len(affected)} blocked scene(s) to {alternate['name']} "
+                    f"on Day {d.affected_day} while keeping the unit shooting."
+                ),
+                scene_changes=[mk_change(s, d.affected_day, alternate["location_id"]) for s in affected],
+            ))
+
+    # --- Option B: full day swap (company move) ---
+    # Swap the entire affected day with the target day. Realistic tactic, and it
+    # exposes location-permit constraints (e.g., exteriors forced onto a day
+    # where the permit has lapsed).
+    day_a_scenes = [s for s in scenes if s["shoot_day"] == d.affected_day]
+    day_b_scenes = [s for s in scenes if s["shoot_day"] == to_day]
+    if day_a_scenes and day_b_scenes and to_day != d.affected_day:
+        changes = [mk_change(s, to_day) for s in day_a_scenes]
+        changes += [mk_change(s, d.affected_day) for s in day_b_scenes]
+        options.append(RecoveryOption(
+            option_id="option_b",
+            name="Swap shoot days",
+            strategy="swap_locations",
+            description=(
+                f"Full company move: swap the entire Day {d.affected_day} slate with "
+                f"Day {to_day}, shooting Day {to_day} material a day early."
+            ),
+            scene_changes=changes,
+        ))
+
+    # --- Option C: wait / hold for the resource ---
+    wait_strategy = "wait_for_actor" if d.disruption_type in (
+        "lead_actor_unavailable", "supporting_actor_unavailable"
+    ) else "move_to_later_day"
+    wait_name = "Wait for actor" if wait_strategy == "wait_for_actor" else "Move to later day"
+    options.append(RecoveryOption(
+        option_id="option_c",
+        name=wait_name,
+        strategy=wait_strategy,
+        description=(
+            f"Hold the unit and absorb the delay: affected scenes stay grouped and shift to "
+            f"Day {to_day}, accepting idle-crew cost on Day {d.affected_day}."
+        ),
+        scene_changes=[mk_change(s, to_day) for s in affected],
+    ))
+
+    # Keep 2-4 options
+    return options[:4]
+
+
+async def polish_descriptions(case: CaseState, options: List[RecoveryOption], bundle: Dict[str, Any]) -> None:
+    """One short structured Gemini call to make option descriptions producer-grade."""
+    try:
+        prompt = (
+            "You are the Schedule Optimizer agent for a film production recovery system. "
+            f"Production: {bundle['production']['title']}. "
+            f"Disruption: {case.disruption.disruption_type} on Day {case.disruption.affected_day}. "
+            "Rewrite each option description in ONE crisp sentence. "
+            "Return JSON array [{\"option_id\": str, \"description\": str}] for: "
+            + "; ".join(f"{o.option_id}: {o.name} — {o.description}" for o in options)
+        )
+        data = await gemini_client.generate_json(prompt, timeout=5.0, max_tokens=256)
+        if isinstance(data, list):
+            by_id = {o.option_id: o for o in options}
+            for item in data:
+                oid = item.get("option_id")
+                desc = (item.get("description") or "").strip()
+                if oid in by_id and 20 < len(desc) < 400:
+                    by_id[oid].description = desc
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("description polish skipped: %s", exc)
