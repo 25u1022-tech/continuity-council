@@ -7,9 +7,9 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import DashboardPage from "./pages/DashboardPage";
 import ReportDisruptionPage from "./pages/ReportDisruptionPage";
 import InvestigationPage from "./pages/InvestigationPage";
-import RecoveryOptionsPage from "./pages/RecoveryOptionsPage";
 import DecisionLedgerPage from "./pages/DecisionLedgerPage";
 import DataMethodologyPage from "./pages/DataMethodologyPage";
+import SettingsPage from "./pages/SettingsPage";
 import "./App.css";
 import { hasColdStart, onColdStart } from "./lib/api";
 
@@ -61,9 +61,11 @@ function AppContent() {
             />
             <Route path="/ledger" element={<DecisionLedgerPage />} />
             <Route path="/methodology" element={<DataMethodologyPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Shell>
       </ProductionProvider>
+
       <Toaster position="bottom-right" theme={theme === "light" ? "light" : "dark"} richColors />
     </>
   );

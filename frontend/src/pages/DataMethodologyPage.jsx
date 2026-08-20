@@ -1,5 +1,5 @@
 import React from "react";
-import { DATA_SOURCES, SIGNAL_IMPACTS, RATE_CARD_BENCHMARKS } from "../lib/dataSources";
+import { DATA_SOURCES, SIGNAL_IMPACTS, RATE_CARD_BENCHMARKS, GEO_EXAMPLE_CITIES } from "../lib/dataSources";
 import { Pill } from "../components/badges";
 import {
   Database,
@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   Layers,
   ExternalLink,
+  Globe,
+  TrendingDown,
 } from "lucide-react";
 
 const ICON_MAP = {
@@ -16,6 +18,7 @@ const ICON_MAP = {
   MapPin: MapPin,
   Coins: Coins,
   Database: Database,
+  Globe: Globe,
 };
 
 export default function DataMethodologyPage() {
@@ -30,9 +33,91 @@ export default function DataMethodologyPage() {
           Data sources & cost methodology
         </h1>
         <p className="mt-1.5 max-w-3xl text-[14px] text-[var(--cc-text-secondary)]">
-          Continuity Council combines ClickHouse Cloud analytical history with live environmental,
-          geographic, and currency signals to generate empirical, rate-card grounded recovery options.
+          Continuity Council combines ClickHouse Cloud analytical history with keyless World Bank macroeconomic data,
+          OpenStreetMap geographic demographics, and ECB spot exchange rates to ground option pricing in reality worldwide.
         </p>
+      </div>
+
+      {/* NEW: Global Geo-Aware Costing Model Card */}
+      <div className="cc-card p-6 md:p-8" data-testid="geo-costing-card">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] text-[var(--cc-text-primary)]">
+            <Globe size={18} strokeWidth={1.75} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-semibold text-[var(--cc-text-primary)]">
+                Global Geo-Aware Costing Engine
+              </h2>
+              <Pill tone="blue">World Bank + OSM</Pill>
+            </div>
+            <p className="text-[13px] text-[var(--cc-text-secondary)]">
+              Universal macroeconomic scaling for ANY country and ANY city worldwide with transparent formula and instant user overrides.
+            </p>
+          </div>
+        </div>
+
+        {/* Formula Box */}
+        <div className="mt-6 rounded-[12px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-5 font-mono text-[14px] leading-relaxed">
+          <div className="font-semibold text-[var(--cc-text-primary)]">
+            Geo Multiplier = Country Multiplier (World Bank) × City Tier Multiplier (OSM)
+          </div>
+          <div className="mt-3 text-[12px] text-[var(--cc-text-secondary)] leading-6">
+            <div className="font-medium text-[var(--cc-text-primary)]">1. Country Multiplier Formula:</div>
+            <div className="pl-4 py-1">
+              <code>country_mult = clamp((GDP_PPP / US_GDP_PPP)^0.6, 0.25, 1.10)</code>
+              <br />
+              <span className="text-[11px] text-[var(--cc-text-tertiary)]">
+                * Live-queried from World Bank indicator <code>NY.GDP.PCAP.PP.CD</code> and cached 30 days in ClickHouse <code>geo_cost_index</code>.
+              </span>
+            </div>
+
+            <div className="font-medium text-[var(--cc-text-primary)] mt-2">2. OSM City Tier Determination:</div>
+            <div className="pl-4 space-y-0.5 text-[12px]">
+              <div>• <span className="font-medium text-[var(--cc-text-primary)]">Tier 1 (1.00x):</span> Population ≥ 5,000,000 OR Sovereign Capital / Megacity (e.g. Mumbai, London, Tokyo, Lagos, Sao Paulo)</div>
+              <div>• <span className="font-medium text-[var(--cc-text-primary)]">Tier 2 (0.50x):</span> Population 200,000 to 1,000,000 OR non-capital 1M–5M (e.g. Dharwad, Hubballi, Lyon, Valencia)</div>
+              <div>• <span className="font-medium text-[var(--cc-text-primary)]">Tier 3 (0.35x):</span> Population &lt; 200,000 (Small towns, rural outposts, remote exterior terrain)</div>
+            </div>
+
+            <div className="font-medium text-[var(--cc-text-primary)] mt-2">3. Zero Live Latency Guarantee:</div>
+            <div className="pl-4 text-[11px] text-[var(--cc-text-tertiary)]">
+              Resolved ONCE upon location onboarding and persisted to the <code>locations</code> ClickHouse record. Agent investigation queries read local geo indices in 0ms (≤2.1s sacred SLA).
+            </div>
+          </div>
+        </div>
+
+        {/* Global Cities Benchmarks Table */}
+        <div className="mt-6">
+          <h3 className="text-[14px] font-semibold text-[var(--cc-text-primary)]">Global City Pricing Benchmarks</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-[13px] border-collapse" data-testid="geo-cities-table">
+              <thead>
+                <tr className="border-b border-[var(--cc-border)] text-[12px] text-[var(--cc-text-secondary)]">
+                  <th className="pb-3 font-medium">City</th>
+                  <th className="pb-3 font-medium">Country</th>
+                  <th className="pb-3 font-medium">City Tier</th>
+                  <th className="pb-3 font-medium">Country Factor</th>
+                  <th className="pb-3 font-medium">Compound Geo Mult</th>
+                  <th className="pb-3 font-medium">Currency</th>
+                  <th className="pb-3 font-medium">Posh Stage Example</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--cc-border)]">
+                {GEO_EXAMPLE_CITIES.map((c) => (
+                  <tr key={c.city} className="text-[var(--cc-text-primary)] hover:bg-[var(--cc-surface-hover)]">
+                    <td className="py-3 font-semibold text-[var(--cc-text-primary)]">{c.city}</td>
+                    <td className="py-3 text-[var(--cc-text-secondary)]">{c.country}</td>
+                    <td className="py-3 font-mono text-[var(--cc-text-secondary)]">{c.tier}</td>
+                    <td className="py-3 font-mono text-[var(--cc-text-secondary)]">{c.countryMult}</td>
+                    <td className="py-3 font-mono font-semibold text-[var(--cc-text-primary)]">{c.geoMult}</td>
+                    <td className="py-3 font-mono text-[var(--cc-text-secondary)]">{c.currency}</td>
+                    <td className="py-3 font-mono font-medium text-[var(--cc-text-primary)]">{c.exampleFee}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Cost Methodology Formula Card */}
@@ -54,7 +139,7 @@ export default function DataMethodologyPage() {
           <div className="mt-3 text-[12px] text-[var(--cc-text-secondary)] leading-6">
             Where:
             <br />
-            • <span className="font-medium text-[var(--cc-text-primary)]">Bottom-Up Cost</span> = (Crew Day Burn × Tier Rate) + (Principal Cast Holding × Scale) + (Target Location Fee × Live FX) + Equipment Days + Weather Contingency
+            • <span className="font-medium text-[var(--cc-text-primary)]">Bottom-Up Cost</span> = (Crew Day Burn × Tier Rate × Geo Mult) + (Principal Cast Holding × Scale) + (Target Location Fee × Live FX × Geo Mult) + Equipment Days + Weather Contingency
             <br />
             • <span className="font-medium text-[var(--cc-text-primary)]">Historical MV Average</span> = Empirical average cost overrun from ClickHouse <code className="rounded bg-[var(--cc-surface)] border border-[var(--cc-border)] px-1.5 py-0.5 text-[var(--cc-text-primary)] font-medium">strategy_performance_mv</code> across 200,000+ past productions
           </div>
@@ -159,89 +244,50 @@ export default function DataMethodologyPage() {
                         <Icon size={18} strokeWidth={1.75} />
                       </div>
                       <div>
-                        <h3 className="text-[16px] font-semibold text-[var(--cc-text-primary)]">{src.name}</h3>
-                        <p className="text-[12px] text-[var(--cc-text-secondary)]">{src.tagline}</p>
+                        <h3 className="font-semibold text-[15px] text-[var(--cc-text-primary)]">{src.name}</h3>
+                        <p className="text-[12px] text-[var(--cc-text-tertiary)]">{src.provider}</p>
                       </div>
                     </div>
+                    {src.attributionUrl && (
+                      <a
+                        href={src.attributionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)] cc-transition"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
                   </div>
 
-                  <div className="space-y-2 text-[13px] text-[var(--cc-text-secondary)]">
+                  <p className="text-[13px] font-medium text-[var(--cc-text-primary)]">{src.tagline}</p>
+
+                  <div className="space-y-2 text-[12px] text-[var(--cc-text-secondary)] leading-relaxed">
                     <div>
-                      <span className="font-medium text-[var(--cc-text-primary)]">What we fetch: </span>
+                      <span className="font-semibold text-[var(--cc-text-primary)]">What we fetch:</span>{" "}
                       {src.whatWeFetch}
                     </div>
                     <div>
-                      <span className="font-medium text-[var(--cc-text-primary)]">Agent integration: </span>
+                      <span className="font-semibold text-[var(--cc-text-primary)]">How it impacts agents:</span>{" "}
                       {src.howUsed}
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] font-mono">
-                    <div className="rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-2.5">
-                      <div className="text-[var(--cc-text-tertiary)]">Cache TTL</div>
-                      <div className="mt-0.5 font-medium text-[var(--cc-text-primary)]">{src.cacheTtl}</div>
+                    <div>
+                      <span className="font-semibold text-[var(--cc-text-primary)]">Caching & Hardening:</span>{" "}
+                      {src.cacheTtl} · {src.timeout}
                     </div>
-                    <div className="rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-2.5">
-                      <div className="text-[var(--cc-text-tertiary)]">SLA & Timeout</div>
-                      <div className="mt-0.5 font-medium text-[var(--cc-text-primary)]">{src.timeout}</div>
+                    <div>
+                      <span className="font-semibold text-[var(--cc-text-primary)]">Fallback behavior:</span>{" "}
+                      {src.fallback}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[var(--cc-border)] pt-4 text-[12px]">
-                  <a
-                    href={src.attributionUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 font-medium text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)]"
-                  >
-                    <span>{src.attribution}</span>
-                    <ExternalLink size={12} />
-                  </a>
-                  <Pill tone="green">Active</Pill>
+                <div className="mt-4 pt-3 border-t border-[var(--cc-border)] flex items-center justify-between text-[11px] text-[var(--cc-text-tertiary)]">
+                  <span>{src.attribution}</span>
                 </div>
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Signal Impact Matrix */}
-      <div className="cc-card p-6 md:p-8">
-        <h2 className="text-[18px] font-semibold text-[var(--cc-text-primary)]">How External Signals Drive Council Decisions</h2>
-        <p className="mt-1 text-[13px] text-[var(--cc-text-secondary)]">
-          Every signal feeds directly into specialist agents with zero hallucination.
-        </p>
-
-        <div className="mt-6 divide-y divide-[var(--cc-border)]">
-          {SIGNAL_IMPACTS.map((sig, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-4 py-4 text-[13px] first:pt-0 last:pb-0">
-              <div className="col-span-12 font-semibold text-[var(--cc-text-primary)] md:col-span-4">
-                {sig.signal}
-              </div>
-              <div className="col-span-12 font-mono text-[12px] text-[var(--cc-text-secondary)] md:col-span-3">
-                {sig.affectedAgent}
-              </div>
-              <div className="col-span-12 text-[var(--cc-text-secondary)] md:col-span-5">
-                {sig.impactDescription}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Resilience & Offline Fallback Architecture */}
-      <div className="cc-card p-6">
-        <div className="flex items-start gap-3.5">
-          <ShieldCheck size={22} className="text-[var(--cc-green-dot)] shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-[16px] font-semibold text-[var(--cc-text-primary)]">15-Second Resilience Guarantee</h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--cc-text-secondary)]">
-              All external HTTP calls are guarded by strict 3.0s timeouts, in-memory TTL caching, and deterministic fallback models.
-              If any external API is down or throttled, the council falls back to calibrated climate and FX baselines seamlessly,
-              ensuring the 15-second investigation SLA is never breached.
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -143,6 +143,30 @@ async def ensure_schema() -> None:
         c.command(
             f"ALTER TABLE {db}.decision_ledger ADD COLUMN IF NOT EXISTS affected_location_id String DEFAULT ''"
         )
+        c.command(
+            f"ALTER TABLE {db}.locations ADD COLUMN IF NOT EXISTS country_code String DEFAULT 'US'"
+        )
+        c.command(
+            f"ALTER TABLE {db}.locations ADD COLUMN IF NOT EXISTS country_mult Float32 DEFAULT 1.0"
+        )
+        c.command(
+            f"ALTER TABLE {db}.locations ADD COLUMN IF NOT EXISTS city_tier String DEFAULT 'tier_1'"
+        )
+        c.command(
+            f"ALTER TABLE {db}.locations ADD COLUMN IF NOT EXISTS geo_mult Float32 DEFAULT 1.0"
+        )
+        c.command(f"""
+            CREATE TABLE IF NOT EXISTS {db}.geo_cost_index
+            (
+                country_code String,
+                country_mult Float32,
+                gdp_ppp Float64,
+                source_note String,
+                updated_at DateTime DEFAULT now()
+            )
+            ENGINE = MergeTree
+            ORDER BY country_code
+        """)
         c.command(f"""
             CREATE TABLE IF NOT EXISTS {db}.rate_cards
             (
@@ -158,9 +182,58 @@ async def ensure_schema() -> None:
         """)
     try:
         await _run(_ensure)
-        logger.info("Schema ensured (rate_cards + geo/rates/studio columns present)")
+        logger.info("Schema ensured (rate_cards + geo/rates/studio columns + geo_cost_index present)")
     except Exception as exc:  # noqa: BLE001
         logger.warning("ensure_schema skipped: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# World Bank Geo Cost Index Cache
+# ---------------------------------------------------------------------------
+async def get_cached_country_factor(country_code: str) -> Optional[Dict[str, Any]]:
+    code = (country_code or "US").upper().strip()
+    def _fetch():
+        c = _get_client()
+        db = _db()
+        try:
+            res = c.query(
+                f"SELECT country_code, country_mult, gdp_ppp, source_note, updated_at "
+                f"FROM {db}.geo_cost_index WHERE country_code = %(code)s AND updated_at >= now() - INTERVAL 30 DAY "
+                f"ORDER BY updated_at DESC LIMIT 1",
+                parameters={"code": code},
+            )
+            if not res.result_rows:
+                return None
+            r = res.result_rows[0]
+            return {
+                "country_code": r[0],
+                "country_mult": float(r[1]),
+                "gdp_ppp": float(r[2]),
+                "source_note": str(r[3]),
+                "is_fallback": False,
+                "warning": "",
+            }
+        except Exception:
+            return None
+    return await _run(_fetch)
+
+
+async def cache_country_factor(country_code: str, country_mult: float, gdp_ppp: float, note: str = "") -> None:
+    code = (country_code or "US").upper().strip()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    def _insert():
+        c = _get_client()
+        db = _db()
+        try:
+            c.insert(
+                f"{db}.geo_cost_index",
+                [[code, float(country_mult), float(gdp_ppp), note or "World Bank open data (CC-BY 4.0)", now]],
+                column_names=["country_code", "country_mult", "gdp_ppp", "source_note", "updated_at"],
+            )
+        except Exception as exc:
+            logger.debug("Failed to cache country factor in ClickHouse: %s", exc)
+    await _run(_insert)
+
 
 
 # ---------------------------------------------------------------------------
@@ -256,10 +329,14 @@ async def create_production(
                 [[l["production_id"], l["location_id"], l["name"], l["location_type"],
                   int(l.get("capacity", 100)), int(l.get("daily_fee_usd", 5000)),
                   float(l.get("latitude", 0.0)), float(l.get("longitude", 0.0)),
-                  l.get("currency_code", "USD"), l.get("notes", ""), now] for l in locations],
+                  l.get("currency_code", "USD"), l.get("notes", ""),
+                  l.get("country_code", "US"), float(l.get("country_mult", 1.0)),
+                  l.get("city_tier", "tier_1"), float(l.get("geo_mult", 1.0)),
+                  now] for l in locations],
                 column_names=["production_id", "location_id", "name", "location_type",
                               "capacity", "daily_fee_usd", "latitude", "longitude",
-                              "currency_code", "notes", "created_at"],
+                              "currency_code", "notes", "country_code", "country_mult",
+                              "city_tier", "geo_mult", "created_at"],
             )
 
         if cast:
@@ -330,7 +407,7 @@ async def fetch_production_bundle(production_id: str) -> Optional[Dict[str, Any]
         }
 
         locs = c.query(
-            f"SELECT location_id, name, location_type, capacity, daily_fee_usd, latitude, longitude, currency_code, notes "
+            f"SELECT location_id, name, location_type, capacity, daily_fee_usd, latitude, longitude, currency_code, notes, country_code, country_mult, city_tier, geo_mult "
             f"FROM {db}.locations WHERE production_id = %(pid)s ORDER BY location_id",
             parameters={"pid": production_id},
         )
@@ -342,6 +419,10 @@ async def fetch_production_bundle(production_id: str) -> Optional[Dict[str, Any]
                 "longitude": float(r[6]) if len(r) > 6 and r[6] is not None else 0.0,
                 "currency_code": r[7] if len(r) > 7 and r[7] else "USD",
                 "notes": r[8] if len(r) > 8 else "",
+                "country_code": r[9] if len(r) > 9 and r[9] else "US",
+                "country_mult": float(r[10]) if len(r) > 10 and r[10] is not None else 1.0,
+                "city_tier": r[11] if len(r) > 11 and r[11] else "tier_1",
+                "geo_mult": float(r[12]) if len(r) > 12 and r[12] is not None else 1.0,
             }
             for r in locs.result_rows
         ]

@@ -7,6 +7,7 @@ import { Textarea } from "../components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
+import { Skeleton } from "../components/ui/skeleton";
 import { Pill } from "../components/badges";
 import { getHealth, getProduction, getImpactPreview, reportDisruption, DISRUPTION_TYPES } from "../lib/api";
 import { useProduction } from "../context/ProductionContext";

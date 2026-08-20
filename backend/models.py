@@ -90,6 +90,12 @@ class LocationInput(BaseModel):
     location_type: str = "interior"     # interior | exterior | stage | studio ...
     permit_notes: str = ""              # permit / constraint text
     available_days: List[int] = []      # 1-based shoot days available; empty = all
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    country_code: Optional[str] = None
+    city_tier: Optional[str] = None
+    currency_code: Optional[str] = None
+    geo_mult: Optional[float] = None
 
 
 class CreateProductionRequest(BaseModel):

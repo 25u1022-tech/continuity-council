@@ -32,11 +32,12 @@ from models import (  # noqa: E402
 from services import (  # noqa: E402
     clickhouse_client,
     gemini_client,
+    geo_service,
     import_service,
     mcp_client,
     scene_generator,
 )
-from services.geo_service import geocode_location  # noqa: E402
+from services.geo_service import geocode_location, resolve_geo_economics  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -164,16 +165,33 @@ async def create_production(req: CreateProductionRequest):
         avail = _valid_days(l.available_days)
         l_name = l.name.strip()
         l_type = (l.location_type or "interior").strip().lower()
-        lat, lon = await geocode_location(l_name)
+
+        # Resolve geo economics once at location creation (ZERO live geo calls during investigation)
+        fallback_lat = float(l.latitude) if l.latitude is not None else 34.05
+        fallback_lon = float(l.longitude) if l.longitude is not None else -118.25
+        geo_info = await resolve_geo_economics(l_name, fallback_lat=fallback_lat, fallback_lon=fallback_lon)
+
+        lat = float(l.latitude if l.latitude is not None else geo_info["latitude"])
+        lon = float(l.longitude if l.longitude is not None else geo_info["longitude"])
+        country_code = (l.country_code or geo_info["country_code"]).upper()
+        country_mult = float(geo_info["country_mult"])
+        city_tier = l.city_tier or geo_info["city_tier"]
+        tier_mult = 1.0 if city_tier == "tier_1" else (0.5 if city_tier == "tier_2" else 0.35)
+        geo_mult = float(l.geo_mult if l.geo_mult is not None else round(country_mult * tier_mult, 4))
+        currency_code = l.currency_code or geo_info["currency_code"]
+
         daily_fee = 10000 if l_type == "stage" else (3500 if l_type == "interior" else 5000)
 
         loc_rows.append({
             "production_id": production_id, "location_id": location_id,
             "name": l_name, "location_type": l_type,
             "capacity": 100, "daily_fee_usd": daily_fee,
-            "latitude": lat, "longitude": lon, "currency_code": "USD",
+            "latitude": lat, "longitude": lon, "currency_code": currency_code,
+            "country_code": country_code, "country_mult": country_mult,
+            "city_tier": city_tier, "geo_mult": geo_mult,
             "notes": l.permit_notes.strip(),
         })
+
         loc_for_gen.append({
             "location_id": location_id, "name": l_name,
             "location_type": l_type, "available_days": avail,
@@ -514,7 +532,25 @@ async def reset_demo(production_id: str | None = None):
     cleared = case_store.clear(production_id)
     logger.info("Demo reset (scope=%s): events cleared, %d in-memory cases cleared",
                 production_id or "all", cleared)
-    return {"status": "reset", "production_id": production_id or "all", "cases_cleared": cleared}
+@api.get("/geo/resolve")
+async def resolve_geo(
+    query: str,
+    lat: float | None = None,
+    lon: float | None = None,
+):
+    """Resolve location to coordinates, World Bank GDP PPP country factor, city tier, and currency."""
+    info = await resolve_geo_economics(
+        query,
+        fallback_lat=lat if lat is not None else 34.05,
+        fallback_lon=lon if lon is not None else -118.25,
+    )
+    return info
+
+
+@api.get("/geo/country-factor")
+async def get_country_factor_endpoint(country_code: str):
+    """Get World Bank GDP PPP country factor for a country code."""
+    return await geo_service.get_country_factor(country_code)
 
 
 app.include_router(api)

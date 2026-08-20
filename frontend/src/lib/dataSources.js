@@ -7,6 +7,21 @@
 
 export const DATA_SOURCES = [
   {
+    id: "world-bank-ppp",
+    name: "World Bank GDP PPP Index",
+    tagline: "Global purchasing power parity and localized economic multiplier",
+    icon: "Globe",
+    provider: "World Bank Group",
+    attribution: "World Bank open data (CC-BY 4.0)",
+    attributionUrl: "https://data.worldbank.org/indicator/NY.GDP.PCAP.PP.CD",
+    endpoint: "https://api.worldbank.org/v2/country/{code}/indicator/NY.GDP.PCAP.PP.CD",
+    whatWeFetch: "Latest GDP per capita (PPP, current international $) for the filming host nation (NY.GDP.PCAP.PP.CD).",
+    howUsed: "Calculates the country multiplier: clamp((GDP_PPP / US_GDP_PPP) ** 0.6, 0.25, 1.10). Combined with OSM population city tiers (tier 1: 1.0x, tier 2: 0.5x, tier 3: 0.35x) to scale crew day burn, location fees, and municipal permits.",
+    cacheTtl: "30 days in ClickHouse geo_cost_index + memory cache",
+    timeout: "3.0 seconds hard timeout",
+    fallback: "Embedded static benchmark table of 40+ countries (India: 0.29x, UK: 0.83x, Brazil: 0.44x, Nigeria: 0.25x; unknown: 1.0x with warning badge).",
+  },
+  {
     id: "open-meteo",
     name: "Open-Meteo Historical Weather",
     tagline: "High-resolution historical precipitation and wind risk modeling",
@@ -30,8 +45,8 @@ export const DATA_SOURCES = [
     attribution: "© OpenStreetMap contributors (ODbL)",
     attributionUrl: "https://www.openstreetmap.org/copyright",
     endpoint: "https://nominatim.openstreetmap.org/search",
-    whatWeFetch: "Precise latitude and longitude coordinates for production locations, soundstages, and remote desert/coastal units.",
-    howUsed: "Used by the Compliance Agent to calculate Haversine great-circle distances between locations. If an emergency relocation requires crew transport >100 miles within a single shoot window, the option is hard-failed as physically impossible.",
+    whatWeFetch: "Precise latitude, longitude, and OSM population tag for production locations, soundstages, and remote desert/coastal units.",
+    howUsed: "Used to determine city tier (≥5M: tier 1, 200k-1M: tier 2, <200k: tier 3) and by the Compliance Agent to calculate Haversine great-circle distances between locations. If an emergency relocation requires crew transport >100 miles within a single shoot window, the option is hard-failed as physically impossible.",
     cacheTtl: "Permanent per resolved location in ClickHouse",
     timeout: "3.0 seconds hard timeout with rate-limiting respect (1 req/s)",
     fallback: "Production base city coordinates or soundstage default coordinates.",
@@ -45,11 +60,11 @@ export const DATA_SOURCES = [
     attribution: "Rates by Frankfurter, source: European Central Bank",
     attributionUrl: "https://www.frankfurter.app/",
     endpoint: "https://api.frankfurter.app/latest",
-    whatWeFetch: "Live reference foreign exchange spot rates for international filming currencies (GBP, EUR, CAD, AED, JOD, USD).",
+    whatWeFetch: "Live reference foreign exchange spot rates for international filming currencies (GBP, EUR, CAD, AED, JOD, INR, BRL, USD).",
     howUsed: "Converts local location daily fees, municipal permits, and international cast day-rates into the production's base accounting currency in real time.",
     cacheTtl: "24 hours in-memory",
     timeout: "3.0 seconds hard timeout",
-    fallback: "Last-known benchmark exchange rates (EUR: 1.08, GBP: 1.28, CAD: 0.74, AED: 0.27, JOD: 1.41).",
+    fallback: "Last-known benchmark exchange rates (EUR: 1.08, GBP: 1.28, CAD: 0.74, AED: 0.27, JOD: 1.41, INR: 0.012).",
   },
   {
     id: "clickhouse-mcp",
@@ -69,6 +84,11 @@ export const DATA_SOURCES = [
 ];
 
 export const SIGNAL_IMPACTS = [
+  {
+    signal: "Global Purchasing Power & City Tier (World Bank + OSM)",
+    affectedAgent: "Budget Sentinel",
+    impactDescription: "Calculates compound geo multiplier (country factor × city tier) to ground crew rates, stage fees, and municipal permits in localized reality worldwide.",
+  },
   {
     signal: "Rain & Wind Probability (Open-Meteo)",
     affectedAgent: "Budget Sentinel & Schedule Optimizer",
@@ -95,4 +115,13 @@ export const RATE_CARD_BENCHMARKS = [
   { tier: "Indie ($1M-$5M)", crewDay: "$40,000 / day", leadScale: "$1,100 / day", soundstage: "$5,000 / day", permit: "$500 / day" },
   { tier: "Mid-Budget ($15M-$50M)", crewDay: "$150,000 / day", leadScale: "$3,500 / day", soundstage: "$10,000 / day", permit: "$1,500 / day" },
   { tier: "Tentpole ($100M-$250M+)", crewDay: "$500,000 / day", leadScale: "$15,000 / day", soundstage: "$25,000 / day", permit: "$5,000 / day" },
+];
+
+export const GEO_EXAMPLE_CITIES = [
+  { city: "Dharwad", country: "India (IN)", tier: "tier-2 (0.50x)", countryMult: "0.29x", geoMult: "0.15x", currency: "INR (₹)", exampleFee: "$750 / day" },
+  { city: "Hubballi", country: "India (IN)", tier: "tier-2 (0.50x)", countryMult: "0.29x", geoMult: "0.15x", currency: "INR (₹)", exampleFee: "$750 / day" },
+  { city: "Mumbai", country: "India (IN)", tier: "tier-1 (1.00x)", countryMult: "0.29x", geoMult: "0.29x", currency: "INR (₹)", exampleFee: "$1,450 / day" },
+  { city: "London", country: "United Kingdom (GB)", tier: "tier-1 (1.00x)", countryMult: "0.83x", geoMult: "0.83x", currency: "GBP (£)", exampleFee: "$4,150 / day" },
+  { city: "Sao Paulo", country: "Brazil (BR)", tier: "tier-1 (1.00x)", countryMult: "0.44x", geoMult: "0.44x", currency: "BRL (R$)", exampleFee: "$2,200 / day" },
+  { city: "Lagos", country: "Nigeria (NG)", tier: "tier-1 (1.00x)", countryMult: "0.25x", geoMult: "0.25x", currency: "NGN (₦)", exampleFee: "$1,250 / day" },
 ];

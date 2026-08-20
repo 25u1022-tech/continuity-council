@@ -442,3 +442,185 @@ class TestExternalSignals:
         assert usd2 == 500
         assert rate2 == 1.0
 
+
+# ---------------------------------------------------------------------------
+# Global Geo-Aware Costing (World Bank + OSM Population + ISO 4217 Currency)
+# ---------------------------------------------------------------------------
+class TestGlobalGeoCosting:
+    def test_city_tier_thresholds(self):
+        from services.geo_service import determine_city_tier
+
+        # Mumbai: 12.5M population >= 5M -> tier_1 (1.0x)
+        tier_mumbai, mult_mumbai = determine_city_tier(12_500_000, is_capital=False, city_name="Mumbai")
+        assert tier_mumbai == "tier_1"
+        assert mult_mumbai == 1.0
+
+        # London: 8.9M population >= 5M (also capital) -> tier_1 (1.0x)
+        tier_london, mult_london = determine_city_tier(8_900_000, is_capital=True, city_name="London")
+        assert tier_london == "tier_1"
+        assert mult_london == 1.0
+
+        # Dharwad: 500k-600k population (200k-1M) -> tier_2 (0.5x)
+        tier_dharwad, mult_dharwad = determine_city_tier(550_000, is_capital=False, city_name="Dharwad")
+        assert tier_dharwad == "tier_2"
+        assert mult_dharwad == 0.5
+
+        # Hubballi: 900k population (200k-1M) -> tier_2 (0.5x)
+        tier_hubballi, mult_hubballi = determine_city_tier(900_000, is_capital=False, city_name="Hubballi")
+        assert tier_hubballi == "tier_2"
+        assert mult_hubballi == 0.5
+
+        # 50k-pop town: 50,000 population (<200k) -> tier_3 (0.35x)
+        tier_50k, mult_50k = determine_city_tier(50_000, is_capital=False, city_name="Smallville")
+        assert tier_50k == "tier_3"
+        assert mult_50k == 0.35
+
+    def test_city_tier_fallback_when_population_missing(self):
+        from services.geo_service import determine_city_tier
+
+        # Capital city with missing pop -> tier_1
+        tier_cap, mult_cap = determine_city_tier(None, is_capital=True, city_name="Brasilia")
+        assert tier_cap == "tier_1"
+        assert mult_cap == 1.0
+
+        # Top megacity with missing pop -> tier_1
+        tier_mega, mult_mega = determine_city_tier(None, is_capital=False, city_name="Tokyo")
+        assert tier_mega == "tier_1"
+        assert mult_mega == 1.0
+
+        # Regular regional town with missing pop -> tier_2
+        tier_reg, mult_reg = determine_city_tier(None, is_capital=False, city_name="RandomTown")
+        assert tier_reg == "tier_2"
+        assert mult_reg == 0.5
+
+    def test_clamp_math_country_factor(self):
+        from services.geo_service import clamp_country_mult
+
+        # US benchmark: 80,000 / 80,000 = 1.0 ** 0.6 = 1.00
+        assert clamp_country_mult(80000.0, 80000.0) == 1.0
+
+        # Very low GDP PPP: 2,000 -> (2000/80000)**0.6 = 0.108 -> clamped to minimum 0.25
+        assert clamp_country_mult(2000.0, 80000.0) == 0.25
+
+        # Very high GDP PPP: 140,000 -> (140000/80000)**0.6 = 1.399 -> clamped to maximum 1.10
+        assert clamp_country_mult(140000.0, 80000.0) == 1.10
+
+        # India benchmark (~10,120) -> (10120/80000)**0.6 = ~0.29
+        assert clamp_country_mult(10120.0, 80000.0) == pytest.approx(0.29, abs=0.02)
+
+        # UK benchmark (~58,200) -> (58200/80000)**0.6 = ~0.83
+        assert clamp_country_mult(58200.0, 80000.0) == pytest.approx(0.83, abs=0.02)
+
+    def test_world_bank_fallback_table(self):
+        import asyncio
+        from services.geo_service import get_country_factor
+
+        # Test India factor
+        factor_in = asyncio.run(get_country_factor("IN"))
+        assert factor_in["country_code"] == "IN"
+        assert 0.25 <= factor_in["country_mult"] <= 0.35
+
+        # Test UK factor
+        factor_gb = asyncio.run(get_country_factor("GB"))
+        assert factor_gb["country_code"] == "GB"
+        assert 0.75 <= factor_gb["country_mult"] <= 0.95
+
+        # Test Brazil factor
+        factor_br = asyncio.run(get_country_factor("BR"))
+        assert factor_br["country_code"] == "BR"
+        assert 0.35 <= factor_br["country_mult"] <= 0.55
+
+        # Test Nigeria factor (clamped minimum 0.25)
+        factor_ng = asyncio.run(get_country_factor("NG"))
+        assert factor_ng["country_code"] == "NG"
+        assert 0.25 <= factor_ng["country_mult"] <= 0.35
+
+
+
+    def test_unknown_country_fallback(self):
+        import asyncio
+        from services.geo_service import get_country_factor
+
+        # Unknown 2-letter country code -> 1.0 with warning badge
+        factor_unknown = asyncio.run(get_country_factor("ZZ"))
+        assert factor_unknown["country_mult"] == 1.0
+        assert factor_unknown["is_fallback"] is True
+        assert "Unknown country" in factor_unknown["warning"]
+
+    def test_iso_4217_currency_mapping(self):
+        from services.geo_service import country_to_currency
+
+        assert country_to_currency("IN") == "INR"
+        assert country_to_currency("IND") == "INR"
+        assert country_to_currency("GB") == "GBP"
+        assert country_to_currency("GBR") == "GBP"
+        assert country_to_currency("BR") == "BRL"
+        assert country_to_currency("NG") == "NGN"
+        assert country_to_currency("US") == "USD"
+        assert country_to_currency("FR") == "EUR"
+        assert country_to_currency("DE") == "EUR"
+        assert country_to_currency("AE") == "AED"
+        assert country_to_currency("JO") == "JOD"
+        assert country_to_currency("JP") == "JPY"
+        # Unknown fallback
+        assert country_to_currency("ZZ") == "USD"
+
+    def test_dharwad_geo_economics_resolution(self):
+        import asyncio
+        from services.geo_service import resolve_geo_economics
+
+        # Dharwad test
+        res = asyncio.run(resolve_geo_economics("Dharwad, Karnataka, India"))
+        assert res["country_code"] == "IN"
+        assert res["currency_code"] == "INR"
+        assert res["city_tier"] == "tier_2"
+        assert res["tier_mult"] == 0.5
+        # Compound geo multiplier: ~0.29 * 0.5 = ~0.15
+        assert 0.13 <= res["geo_mult"] <= 0.17
+        assert "World Bank" in res["source_note"]
+
+    def test_budget_sentinel_with_geo_multiplier(self, bundle, case):
+        import asyncio
+        from agents import budget_sentinel
+        from models import EvidenceRow, RecoveryOption, SceneChange
+
+        # Configure location in Dharwad (IN, tier_2, geo_mult=0.15, INR)
+        bundle["locations"] = [
+            {
+                "location_id": "loc_dharwad",
+                "name": "Dharwad Heritage Stage",
+                "location_type": "stage",
+                "latitude": 15.4589,
+                "longitude": 75.0078,
+                "daily_fee_usd": 5000,
+                "currency_code": "INR",
+                "country_code": "IN",
+                "city_tier": "tier_2",
+                "country_mult": 0.29,
+                "geo_mult": 0.15,
+            }
+        ]
+
+        case.evidence_rows = [
+            EvidenceRow(resolution_strategy="swap_locations", avg_cost_overrun_usd=10000.0, avg_delay_hours=4.0, past_cases=100)
+        ]
+
+        option = RecoveryOption(
+            option_id="opt_dharwad",
+            name="Relocate to Dharwad Stage",
+            strategy="swap_locations",
+            scene_changes=[
+                SceneChange(scene_id="sc_005", from_day=2, to_day=2, to_location="loc_dharwad")
+            ],
+        )
+
+        asyncio.run(budget_sentinel.calibrate_option_economics(case, [option], bundle))
+        assert option.cost_breakdown is not None
+        # Check transparent Geo Adjustment line item
+        geo_lines = [l for l in option.cost_breakdown.breakdown if "Geo adjustment" in l.line]
+        assert len(geo_lines) >= 1
+        assert "IN" in geo_lines[0].line
+        assert "tier-2" in geo_lines[0].line
+        assert "World Bank" in geo_lines[0].source
+
+

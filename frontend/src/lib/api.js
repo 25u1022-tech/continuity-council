@@ -112,6 +112,16 @@ export const importHistoryCsv = async (productionId, file) => {
 export const getStudioCohort = (productionId) =>
   request(`/productions/${encodeURIComponent(productionId)}/studio-cohort`);
 
+export const resolveGeoEconomics = (query, lat, lon) => {
+  const qs = new URLSearchParams({ query });
+  if (lat !== undefined && lat !== null) qs.set("lat", String(lat));
+  if (lon !== undefined && lon !== null) qs.set("lon", String(lon));
+  return request(`/geo/resolve?${qs.toString()}`);
+};
+
+export const getCountryFactor = (countryCode) =>
+  request(`/geo/country-factor?country_code=${encodeURIComponent(countryCode)}`);
+
 export const CAST_CSV_TEMPLATE =
   "name,role,available_days\n" +
   "Aria Blackwood,lead,all\n" +

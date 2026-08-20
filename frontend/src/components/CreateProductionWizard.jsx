@@ -320,10 +320,15 @@ export const CreateProductionWizard = ({ open, onOpenChange, onCreated }) => {
           available_days: l.days,
           latitude: l.latitude || 34.0522,
           longitude: l.longitude || -118.2437,
+          country_code: l.country_code || "US",
+          city_tier: l.city_tier || "tier_1",
+          currency_code: l.currency_code || "USD",
+          geo_mult: l.geo_mult || 1.0,
         })),
       };
 
       const res = await createProduction(payload);
+
       const newPid = res.production_id;
 
       // Ingest historical CSV if attached
@@ -624,8 +629,21 @@ export const CreateProductionWizard = ({ open, onOpenChange, onCreated }) => {
                           latitude={l.latitude || 34.0522}
                           longitude={l.longitude || -118.2437}
                           locationName={l.name}
-                          height="220px"
-                          onChange={(coords) => updateLocation(i, { latitude: coords.lat, longitude: coords.lng })}
+                          cityTier={l.city_tier || "tier_1"}
+                          countryCode={l.country_code || "US"}
+                          currency={l.currency_code || "USD"}
+                          geoMult={l.geo_mult || 1.0}
+                          height="240px"
+                          onChange={(geo) =>
+                            updateLocation(i, {
+                              latitude: geo.lat || geo.latitude,
+                              longitude: geo.lng || geo.longitude,
+                              country_code: geo.country_code || l.country_code || "US",
+                              city_tier: geo.city_tier || l.city_tier || "tier_1",
+                              currency_code: geo.currency_code || l.currency_code || "USD",
+                              geo_mult: geo.geo_mult !== undefined ? geo.geo_mult : l.geo_mult || 1.0,
+                            })
+                          }
                         />
                       </div>
                     )}

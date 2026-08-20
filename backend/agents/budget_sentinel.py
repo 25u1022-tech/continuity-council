@@ -207,6 +207,10 @@ async def calibrate_option_economics(
             "lat": float(l.get("latitude", 0.0) or 0.0),
             "lon": float(l.get("longitude", 0.0) or 0.0),
             "type": l.get("location_type", "interior"),
+            "country_code": l.get("country_code", "US") or "US",
+            "country_mult": float(l.get("country_mult", 1.0) or 1.0),
+            "city_tier": l.get("city_tier", "tier_1") or "tier_1",
+            "geo_mult": float(l.get("geo_mult", 1.0) or 1.0),
         }
         for l in bundle["locations"]
     }
@@ -248,8 +252,17 @@ async def calibrate_option_economics(
         loc_lon = loc_info.get("lon", 0.0)
         loc_fee = loc_info.get("fee", 5000)
         is_outdoor = loc_info.get("type", "interior") == "exterior"
+        loc_geo_mult = float(loc_info.get("geo_mult", 1.0) or 1.0)
+        loc_country = loc_info.get("country_code", "US") or "US"
+        loc_tier = loc_info.get("city_tier", "tier_1") or "tier_1"
+        tier_label = loc_tier.replace("_", "-")
 
-        # 1. Fetch live signals in parallel
+        # Geo-adjusted operational baseline rates for this location
+        adj_crew_rate = int(round(crew_day_rate * loc_geo_mult))
+        adj_stage_rate = int(round(stage_day_rate * loc_geo_mult))
+        adj_permit_rate = int(round(permit_day_rate * loc_geo_mult))
+
+        # 1. Fetch live signals in parallel (Weather & FX) - zero live geo calls during investigation
         w_task = get_weather_risk(loc_lat, loc_lon)
         fx_task = get_exchange_rate(loc_curr, "USD")
         w_res, fx_res = await asyncio.gather(w_task, fx_task)
@@ -264,13 +277,22 @@ async def calibrate_option_economics(
             fx_summary = f"Applied {fx_applied:.2f} {loc_curr}/USD — {fx_res['source']}"
             opt.fx_summary = fx_summary
 
+        # Add transparent Geo Adjustment breakdown line
+        lines.append(
+            CostLineItem(
+                line=f"Geo adjustment x{loc_geo_mult:.2f} ({loc_country}, {tier_label})",
+                amount_usd=0,
+                source="World Bank GDP PPP (CC-BY 4.0) + OSM Population Tier",
+            )
+        )
+
         # 2. Compute bottom-up line items based on strategy
         strat = opt.strategy
         if strat == "shoot_cover_scenes":
-            crew_cost = int(crew_day_rate * 0.08)
-            stage_hold = int(stage_day_rate * 0.4)
-            lines.append(CostLineItem(line="Set Transition & Crew Staging (0.08 crew day)", amount_usd=crew_cost, source="Rate card: crew_day"))
-            lines.append(CostLineItem(line="Soundstage Facility Holding & Power", amount_usd=stage_hold, source="Rate card: stage_rental_day"))
+            crew_cost = int(adj_crew_rate * 0.08)
+            stage_hold = int(adj_stage_rate * 0.4)
+            lines.append(CostLineItem(line="Set Transition & Crew Staging (0.08 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
+            lines.append(CostLineItem(line="Soundstage Facility Holding & Power", amount_usd=stage_hold, source="Rate card: stage_rental_day (geo-scaled)"))
 
             # Cast hold for affected principal
             if case.disruption.affected_cast_id:
@@ -278,37 +300,40 @@ async def calibrate_option_economics(
                 lines.append(CostLineItem(line=f"Principal Cast Standby Hold ({case.disruption.affected_cast_id})", amount_usd=c_rate, source="Cast day rate"))
 
         elif strat in ("swap_locations", "swap_shoot_days"):
-            crew_cost = int(crew_day_rate * 0.15)
-            lines.append(CostLineItem(line="Company Transit & Rigging Turnaround (0.15 crew day)", amount_usd=crew_cost, source="Rate card: crew_day"))
+            crew_cost = int(adj_crew_rate * 0.15)
+            lines.append(CostLineItem(line="Company Transit & Rigging Turnaround (0.15 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
 
-            # Location daily fee with FX conversion
-            converted_fee = int(round(loc_fee * fx_applied))
+            # Location daily fee with FX conversion and geo multiplier
+            converted_fee = int(round(loc_fee * fx_applied * loc_geo_mult))
             loc_label = f"Target Location Daily Fee ({loc_info.get('name', target_loc_id)})"
             if loc_curr != "USD":
-                loc_label += f" [{loc_curr} {loc_fee:,} @ {fx_applied:.2f} FX]"
+                loc_label += f" [{loc_curr} {loc_fee:,} @ {fx_applied:.2f} FX × {loc_geo_mult:.2f} Geo]"
+            else:
+                loc_label += f" [${loc_fee:,} × {loc_geo_mult:.2f} Geo]"
             lines.append(CostLineItem(line=loc_label, amount_usd=converted_fee, source=f"Location fee & {fx_res['source']}"))
 
             # Outdoor weather contingency buffer
             if is_outdoor and weather_risk_score > 35:
-                weather_buff = int(crew_day_rate * 0.05)
+                weather_buff = int(adj_crew_rate * 0.05)
                 lines.append(CostLineItem(line=f"Weather Contingency Buffer ({w_res['rain_risk_pct']}% rain risk)", amount_usd=weather_buff, source="Open-Meteo risk model"))
 
         elif strat == "move_to_later_day":
-            crew_cost = int(crew_day_rate * 0.22)
+            crew_cost = int(adj_crew_rate * 0.22)
             cam_cost = int(camera_day_rate * 1.0)
-            lines.append(CostLineItem(line="Schedule Day Push & Extended Crew Hours (0.22 crew day)", amount_usd=crew_cost, source="Rate card: crew_day"))
+            lines.append(CostLineItem(line="Schedule Day Push & Extended Crew Hours (0.22 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
             lines.append(CostLineItem(line="Camera Package & Grip Gear Day Extension", amount_usd=cam_cost, source="Rate card: camera_package_day"))
-            lines.append(CostLineItem(line="Municipal Permit Rescheduling Fee", amount_usd=permit_day_rate, source="Rate card: permit_day"))
+            lines.append(CostLineItem(line="Municipal Permit Rescheduling Fee", amount_usd=adj_permit_rate, source="Rate card: permit_day (geo-scaled)"))
 
         elif strat in ("wait_for_actor", "standby"):
-            crew_cost = int(crew_day_rate * 0.35)
-            lines.append(CostLineItem(line="Idle Full Unit Standby Burn (0.35 crew day)", amount_usd=crew_cost, source="Rate card: crew_day"))
-            lines.append(CostLineItem(line="Location Standby Holding Fee", amount_usd=int(loc_fee * fx_applied), source="Location rate"))
+            crew_cost = int(adj_crew_rate * 0.35)
+            lines.append(CostLineItem(line="Idle Full Unit Standby Burn (0.35 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
+            lines.append(CostLineItem(line="Location Standby Holding Fee", amount_usd=int(loc_fee * fx_applied * loc_geo_mult), source="Location rate (geo-scaled)"))
 
         else:  # split_scene, recast_scene, etc.
-            crew_cost = int(crew_day_rate * 0.12)
-            lines.append(CostLineItem(line="Specialist Unit Setup & Additional Slates (0.12 crew day)", amount_usd=crew_cost, source="Rate card: crew_day"))
-            lines.append(CostLineItem(line="Production Contingency & Inserts Reserve", amount_usd=int(loc_fee * 0.5), source="Rate card benchmark"))
+            crew_cost = int(adj_crew_rate * 0.12)
+            lines.append(CostLineItem(line="Specialist Unit Setup & Additional Slates (0.12 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
+            lines.append(CostLineItem(line="Production Contingency & Inserts Reserve", amount_usd=int(loc_fee * 0.5 * loc_geo_mult), source="Rate card benchmark"))
+
 
         bottom_up_total = sum(l.amount_usd for l in lines)
 
