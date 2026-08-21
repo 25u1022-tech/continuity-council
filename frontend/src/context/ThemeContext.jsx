@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { safeStorage, safeMatchMedia } from "../lib/storage";
 
 const ThemeContext = createContext({
   theme: "dark",
@@ -8,21 +9,30 @@ const ThemeContext = createContext({
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setThemeState] = useState(() => {
-    const saved = localStorage.getItem("cc_theme");
-    if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark";
+    try {
+      const saved = safeStorage.getItem("cc_theme");
+      if (saved === "light" || saved === "dark") return saved;
+      const media = safeMatchMedia("(prefers-color-scheme: light)");
+      return media && media.matches ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    try {
+      if (typeof document !== "undefined") {
+        const root = document.documentElement;
+        if (theme === "dark") {
+          root.classList.add("dark");
+        } else {
+          root.classList.remove("dark");
+        }
+      }
+      safeStorage.setItem("cc_theme", theme);
+    } catch {
+      // ignore
     }
-    localStorage.setItem("cc_theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {

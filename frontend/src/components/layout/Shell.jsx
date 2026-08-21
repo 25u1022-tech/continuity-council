@@ -16,6 +16,7 @@ import { ActivityTicker } from "../ActivityTicker";
 import { useProduction } from "../../context/ProductionContext";
 import { useTheme } from "../../context/ThemeContext";
 import { CreateProductionWizard } from "../CreateProductionWizard";
+import { safeStorage } from "../../lib/storage";
 import {
   Clapperboard,
   LayoutDashboard,
@@ -71,7 +72,7 @@ export const Shell = ({ children, activeCase }) => {
     setResetting(true);
     try {
       await resetDemo(selectedId);
-      localStorage.removeItem("cc_active_case");
+      safeStorage.removeItem("cc_active_case");
       toast.success("Reset — baseline schedule restored");
       setTimeout(() => {
         window.location.href = "/";
@@ -215,7 +216,7 @@ export const Shell = ({ children, activeCase }) => {
                 {health === null
                   ? "Checking ClickHouse"
                   : chConnected
-                  ? `ClickHouse · ${(health.clickhouse.history_rows || 0).toLocaleString()} rows`
+                  ? `ClickHouse · ${(health?.clickhouse?.history_rows || 0).toLocaleString()} rows`
                   : "ClickHouse offline"}
               </span>
             </div>

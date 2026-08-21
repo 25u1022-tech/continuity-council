@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useTheme } from "../context/ThemeContext";
 import { getHealth, getCountryFactor } from "../lib/api";
 import { Pill } from "../components/badges";
+import { safeStorage } from "../lib/storage";
 import {
   Settings,
   Sun,
@@ -25,23 +26,23 @@ export default function SettingsPage() {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // User Settings State (Persisted in localStorage)
-  const [units, setUnits] = useState(() => localStorage.getItem("cc_units") || "miles");
+  // User Settings State (Persisted in localStorage safely)
+  const [units, setUnits] = useState(() => safeStorage.getItem("cc_units", "miles"));
   const [baseCurrency, setBaseCurrency] = useState(
-    () => localStorage.getItem("cc_base_currency") || "USD"
+    () => safeStorage.getItem("cc_base_currency", "USD")
   );
-  const [density, setDensity] = useState(() => localStorage.getItem("cc_density") || "default");
+  const [density, setDensity] = useState(() => safeStorage.getItem("cc_density", "default"));
   const [bottomUpWeight, setBottomUpWeight] = useState(
-    () => Number(localStorage.getItem("cc_bottom_up_weight")) || 70
+    () => Number(safeStorage.getItem("cc_bottom_up_weight", "70")) || 70
   );
   const [tier1Mult, setTier1Mult] = useState(
-    () => Number(localStorage.getItem("cc_tier_1_mult")) || 1.0
+    () => Number(safeStorage.getItem("cc_tier_1_mult", "1.0")) || 1.0
   );
   const [tier2Mult, setTier2Mult] = useState(
-    () => Number(localStorage.getItem("cc_tier_2_mult")) || 0.5
+    () => Number(safeStorage.getItem("cc_tier_2_mult", "0.5")) || 0.5
   );
   const [tier3Mult, setTier3Mult] = useState(
-    () => Number(localStorage.getItem("cc_tier_3_mult")) || 0.35
+    () => Number(safeStorage.getItem("cc_tier_3_mult", "0.35")) || 0.35
   );
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function SettingsPage() {
 
   const saveSetting = (key, val, setter) => {
     setter(val);
-    localStorage.setItem(key, String(val));
+    safeStorage.setItem(key, String(val));
     toast.success("Settings updated");
   };
 

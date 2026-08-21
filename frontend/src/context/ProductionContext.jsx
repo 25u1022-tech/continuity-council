@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getHealth, listProductions, PRODUCTION_ID } from "../lib/api";
+import { safeStorage } from "../lib/storage";
 
 const STORAGE_KEY = "cc_selected_production";
 const ProductionContext = createContext(null);
@@ -7,7 +8,7 @@ const ProductionContext = createContext(null);
 export const ProductionProvider = ({ children }) => {
   const [productions, setProductions] = useState([]);
   const [selectedId, setSelectedId] = useState(
-    () => localStorage.getItem(STORAGE_KEY) || PRODUCTION_ID
+    () => safeStorage.getItem(STORAGE_KEY, PRODUCTION_ID)
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,23 +46,23 @@ export const ProductionProvider = ({ children }) => {
   }, [refresh]);
 
   useEffect(() => {
-    if (selectedId) localStorage.setItem(STORAGE_KEY, selectedId);
+    if (selectedId) safeStorage.setItem(STORAGE_KEY, selectedId);
   }, [selectedId]);
 
   const select = useCallback((id) => {
     if (!id) return;
     // Switching production invalidates the active case pointer.
-    localStorage.removeItem("cc_active_case");
+    safeStorage.removeItem("cc_active_case");
     setSelectedId(id);
   }, []);
 
   const selected = useMemo(
-    () => productions.find((p) => p.production_id === selectedId) || null,
+    () => (productions || []).find((p) => p?.production_id === selectedId) || null,
     [productions, selectedId]
   );
 
   const value = useMemo(
-    () => ({ productions, selectedId, selected, loading, error, refresh, select }),
+    () => ({ productions: productions || [], selectedId, selected, loading, error, refresh, select }),
     [productions, selectedId, selected, loading, error, refresh, select]
   );
 

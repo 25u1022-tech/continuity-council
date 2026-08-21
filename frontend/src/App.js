@@ -4,30 +4,45 @@ import { Toaster } from "./components/ui/sonner";
 import { Shell } from "./components/layout/Shell";
 import { ProductionProvider } from "./context/ProductionContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import DashboardPage from "./pages/DashboardPage";
 import ReportDisruptionPage from "./pages/ReportDisruptionPage";
 import InvestigationPage from "./pages/InvestigationPage";
+import RecoveryOptionsPage from "./pages/RecoveryOptionsPage";
 import DecisionLedgerPage from "./pages/DecisionLedgerPage";
 import DataMethodologyPage from "./pages/DataMethodologyPage";
 import SettingsPage from "./pages/SettingsPage";
 import "./App.css";
 import { hasColdStart, onColdStart } from "./lib/api";
+import { safeStorage } from "./lib/storage";
 
 function AppContent() {
   const { theme } = useTheme();
   const [activeCaseId, setActiveCaseIdState] = useState(
-    () => localStorage.getItem("cc_active_case") || ""
+    () => safeStorage.getItem("cc_active_case", "")
   );
   const [activeCase, setActiveCase] = useState(null);
-  const [coldStart, setColdStart] = useState(() => hasColdStart());
+  const [coldStart, setColdStart] = useState(() => {
+    try {
+      return Boolean(hasColdStart());
+    } catch {
+      return false;
+    }
+  });
 
   const setActiveCaseId = (id) => {
-    setActiveCaseIdState(id);
-    if (id) localStorage.setItem("cc_active_case", id);
-    else localStorage.removeItem("cc_active_case");
+    setActiveCaseIdState(id || "");
+    if (id) safeStorage.setItem("cc_active_case", id);
+    else safeStorage.removeItem("cc_active_case");
   };
 
-  useLayoutEffect(() => onColdStart(() => setColdStart(true)), []);
+  useLayoutEffect(() => {
+    try {
+      return onColdStart(() => setColdStart(true));
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   return (
     <>
@@ -41,28 +56,30 @@ function AppContent() {
           </div>
         )}
         <Shell activeCase={activeCase}>
-          <Routes>
-            <Route path="/" element={<DashboardPage activeCaseId={activeCaseId} />} />
-            <Route
-              path="/report"
-              element={<ReportDisruptionPage setActiveCaseId={setActiveCaseId} />}
-            />
-            <Route
-              path="/investigation"
-              element={
-                <InvestigationPage caseId={activeCaseId} onCaseUpdate={setActiveCase} />
-              }
-            />
-            <Route
-              path="/options"
-              element={
-                <RecoveryOptionsPage caseId={activeCaseId} onCaseUpdate={setActiveCase} />
-              }
-            />
-            <Route path="/ledger" element={<DecisionLedgerPage />} />
-            <Route path="/methodology" element={<DataMethodologyPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<DashboardPage activeCaseId={activeCaseId} />} />
+              <Route
+                path="/report"
+                element={<ReportDisruptionPage setActiveCaseId={setActiveCaseId} />}
+              />
+              <Route
+                path="/investigation"
+                element={
+                  <InvestigationPage caseId={activeCaseId} onCaseUpdate={setActiveCase} />
+                }
+              />
+              <Route
+                path="/options"
+                element={
+                  <RecoveryOptionsPage caseId={activeCaseId} onCaseUpdate={setActiveCase} />
+                }
+              />
+              <Route path="/ledger" element={<DecisionLedgerPage />} />
+              <Route path="/methodology" element={<DataMethodologyPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </ErrorBoundary>
         </Shell>
       </ProductionProvider>
 
@@ -73,11 +90,13 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

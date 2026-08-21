@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { safeMatchMedia } from "../lib/storage";
 
 /** Apple Health-style count-up for stat numbers. Respects reduced motion. */
 export function useCountUp(target, { duration = 800, enabled = true } = {}) {
@@ -7,10 +8,7 @@ export function useCountUp(target, { duration = 800, enabled = true } = {}) {
 
   useEffect(() => {
     const final = Number(target) || 0;
-    const reduced =
-      typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = safeMatchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!enabled || reduced || final === 0) {
       setValue(final);
       return undefined;
