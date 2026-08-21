@@ -40,6 +40,7 @@ Orchestrator Agent ──── typed async state machine (Pydantic)
 - [Cost Estimation Methodology & Calibration Engine](docs/COST_METHODOLOGY.md)
 - [Live External Data Sources & Attribution Specification](docs/DATA_SOURCES.md)
 - [Studio Historical Data Ingestion & Tenant Blending](docs/DATA_ONBOARDING.md)
+- [Complete Change Report (Phases 0–2)](docs/CHANGE_REPORT.md)
 
 ## Tech Stack (track requirements)
 
