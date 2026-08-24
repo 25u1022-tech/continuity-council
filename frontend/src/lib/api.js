@@ -1,4 +1,8 @@
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const BACKEND_URL =
+  process.env.REACT_APP_BACKEND_URL ||
+  (typeof window !== "undefined" && (window.location.port === "3000" || window.location.port === "5173")
+    ? "http://localhost:8001"
+    : "");
 export const API = `${BACKEND_URL}/api`;
 
 const COLD_START_EVENT = "cc:cold-start";
