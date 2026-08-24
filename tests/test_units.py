@@ -624,3 +624,216 @@ class TestGlobalGeoCosting:
         assert "World Bank" in geo_lines[0].source
 
 
+# ---------------------------------------------------------------------------
+# 7. Production Validation & Shoot Day Bounds
+# ---------------------------------------------------------------------------
+class TestProductionValidationAndDayBounds:
+    def test_affected_day_over_30_accepted_in_model(self):
+        report_45 = DisruptionReport(
+            production_id="prod_001",
+            disruption_type="weather_delay",
+            affected_day=45,
+            severity="high",
+        )
+        assert report_45.affected_day == 45
+
+        report_90 = DisruptionReport(
+            production_id="prod_001",
+            disruption_type="equipment_failure",
+            affected_day=90,
+            severity="medium",
+        )
+        assert report_90.affected_day == 90
+
+    def test_affected_day_invalid_values_rejected_in_model(self):
+        from pydantic import ValidationError
+
+        # Negative
+        with pytest.raises(ValidationError):
+            DisruptionReport(
+                production_id="prod_001",
+                disruption_type="weather_delay",
+                affected_day=-5,
+            )
+
+        # Zero
+        with pytest.raises(ValidationError):
+            DisruptionReport(
+                production_id="prod_001",
+                disruption_type="weather_delay",
+                affected_day=0,
+            )
+
+        # Absurdly large (> 3650)
+        with pytest.raises(ValidationError):
+            DisruptionReport(
+                production_id="prod_001",
+                disruption_type="weather_delay",
+                affected_day=5000,
+            )
+
+    def test_impact_preview_endpoint_accepts_day_over_30(self, monkeypatch, bundle):
+        from fastapi.testclient import TestClient
+        from server import app
+        import services.clickhouse_client as ch
+
+        monkeypatch.setattr(ch, "is_configured", lambda: True)
+
+        async def mock_fetch(pid):
+            b = dict(bundle)
+            b["scenes"] = b["scenes"] + [
+                {"scene_id": "sc_045", "scene_title": "Day 45 Scene", "shoot_day": 45,
+                 "sequence_order": 45, "location_id": "stage_a", "required_cast": ["supp_001"],
+                 "scene_type": "interior", "is_cover_scene": False, "priority": 1,
+                 "continuity_tags": [], "depends_on": [], "status": "scheduled"}
+            ]
+            return b
+
+        monkeypatch.setattr(ch, "fetch_production_bundle", mock_fetch)
+
+        client = TestClient(app)
+        res = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_001",
+                "disruption_type": "weather_delay",
+                "affected_day": 45,
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["affected_day"] == 45
+        assert len(data["scenes"]) == 1
+        assert data["scenes"][0]["scene_id"] == "sc_045"
+
+    def test_impact_preview_endpoint_rejects_invalid_day(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from server import app
+        import services.clickhouse_client as ch
+
+        monkeypatch.setattr(ch, "is_configured", lambda: True)
+        client = TestClient(app)
+
+        # Day 0
+        res = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_001",
+                "disruption_type": "weather_delay",
+                "affected_day": 0,
+            },
+        )
+        assert res.status_code == 422
+
+        # Negative day
+        res_neg = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_001",
+                "disruption_type": "weather_delay",
+                "affected_day": -10,
+            },
+        )
+        assert res_neg.status_code == 422
+
+        # Absurdly large (> 3650)
+        res_huge = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_001",
+                "disruption_type": "weather_delay",
+                "affected_day": 99999,
+            },
+        )
+        assert res_huge.status_code == 422
+
+        # Non-numeric
+        res_str = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_001",
+                "disruption_type": "weather_delay",
+                "affected_day": "forty-two",
+            },
+        )
+        assert res_str.status_code == 422
+
+    def test_malformed_production_id_returns_422(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from server import app
+        import services.clickhouse_client as ch
+
+        monkeypatch.setattr(ch, "is_configured", lambda: True)
+        client = TestClient(app)
+
+        # Illegal characters in path parameter
+        res = client.get("/api/productions/bad@id!#")
+        assert res.status_code == 422
+
+        # Too short (< 3 chars)
+        res_short = client.get("/api/productions/ab")
+        assert res_short.status_code == 422
+
+        # Malformed in audit endpoint
+        res_audit = client.get("/api/audit/invalid$$$")
+        assert res_audit.status_code == 422
+
+        # Malformed in studio cohort endpoint
+        res_cohort = client.get("/api/productions/spaces in id/studio-cohort")
+        assert res_cohort.status_code == 422
+
+    def test_nonexistent_production_id_returns_404(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from server import app
+        import services.clickhouse_client as ch
+
+        monkeypatch.setattr(ch, "is_configured", lambda: True)
+
+        async def mock_fetch_none(pid):
+            return None
+
+        async def mock_exists_false(pid):
+            return False
+
+        monkeypatch.setattr(ch, "fetch_production_bundle", mock_fetch_none)
+        monkeypatch.setattr(ch, "production_exists", mock_exists_false)
+
+        client = TestClient(app)
+
+        # GET /productions/{id}
+        res_get = client.get("/api/productions/prod_nonexistent")
+        assert res_get.status_code == 404
+
+        # GET /productions/{id}/studio-cohort
+        res_cohort = client.get("/api/productions/prod_nonexistent/studio-cohort")
+        assert res_cohort.status_code == 404
+
+        # GET /audit/{id}
+        res_audit = client.get("/api/audit/prod_nonexistent")
+        assert res_audit.status_code == 404
+
+        # GET /disruptions/impact-preview
+        res_preview = client.get(
+            "/api/disruptions/impact-preview",
+            params={
+                "production_id": "prod_nonexistent",
+                "disruption_type": "weather_delay",
+                "affected_day": 2,
+            },
+        )
+        assert res_preview.status_code == 404
+
+        # POST /disruptions with nonexistent production
+        res_report = client.post(
+            "/api/disruptions",
+            json={
+                "production_id": "prod_nonexistent",
+                "disruption_type": "weather_delay",
+                "affected_day": 2,
+                "severity": "high",
+            },
+        )
+        assert res_report.status_code == 404
+
+
+

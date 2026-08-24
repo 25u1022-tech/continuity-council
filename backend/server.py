@@ -8,15 +8,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from pathlib import Path
+from pathlib import Path as FilePath
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, Path, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = FilePath(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import case_store  # noqa: E402
@@ -44,6 +44,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger("continuity.api")
+
+PRODUCTION_ID_PATTERN = r"^[a-zA-Z0-9_\-]{3,64}$"
+CASE_ID_PATTERN = r"^[a-zA-Z0-9_\-]{3,64}$"
 
 app = FastAPI(title="Continuity Council API", version="1.0.0")
 api = APIRouter(prefix="/api")
@@ -241,7 +244,9 @@ async def create_production(req: CreateProductionRequest):
 
 
 @api.get("/productions/{production_id}")
-async def get_production(production_id: str):
+async def get_production(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+):
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured. Add credentials to backend/.env.")
     try:
@@ -279,7 +284,7 @@ async def download_disruption_history_template():
 
 @api.post("/productions/{production_id}/import-history")
 async def import_production_history(
-    production_id: str,
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
     file: UploadFile = File(...),
 ):
     """Import historical disruption CSV for a specific production tenant."""
@@ -293,6 +298,8 @@ async def import_production_history(
 
     # Determine studio_id for this production
     bundle = await clickhouse_client.fetch_production_bundle(production_id)
+    if bundle is None:
+        raise HTTPException(404, f"Production {production_id} not found.")
     studio_id = "global"
     if bundle and bundle.get("production"):
         studio_id = bundle["production"].get("studio_id", "global") or "global"
@@ -310,9 +317,13 @@ async def import_production_history(
 
 
 @api.get("/productions/{production_id}/studio-cohort")
-async def get_studio_cohort(production_id: str):
+async def get_studio_cohort(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+):
     """Get current studio historical cohort sample size and blending weight."""
     bundle = await clickhouse_client.fetch_production_bundle(production_id)
+    if bundle is None:
+        raise HTTPException(404, f"Production {production_id} not found.")
     studio_id = "global"
     if bundle and bundle.get("production"):
         studio_id = bundle["production"].get("studio_id", "global") or "global"
@@ -343,14 +354,14 @@ def _impact_preview_scenes(bundle, disruption_type: str, affected_day: int,
 
 @api.get("/disruptions/impact-preview")
 async def disruption_impact_preview(
-    production_id: str,
-    disruption_type: DisruptionType,
-    affected_day: int,
-    affected_cast_id: str = "",
-    affected_location_id: str = "",
+    production_id: str = Query(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    disruption_type: DisruptionType = Query(...),
+    affected_day: int = Query(..., ge=1, le=3650, description="Affected shoot day (1..3650)"),
+    affected_cast_id: str = Query(""),
+    affected_location_id: str = Query(""),
 ):
-    if not 1 <= affected_day <= 30:
-        raise HTTPException(422, "affected_day must be between 1 and 30")
+    if not 1 <= affected_day <= 3650:
+        raise HTTPException(422, "affected_day must be between 1 and 3650")
     if disruption_type == "location_unavailable" and not affected_location_id.strip():
         raise HTTPException(422, "affected_location_id is required for location_unavailable")
     if disruption_type in ("lead_actor_unavailable", "supporting_actor_unavailable") and not affected_cast_id.strip():
@@ -370,6 +381,8 @@ async def disruption_impact_preview(
 async def report_disruption(report: DisruptionReport):
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured. Add credentials to backend/.env.")
+    if not await clickhouse_client.production_exists(report.production_id):
+        raise HTTPException(404, f"Production '{report.production_id}' not found")
     case = new_case(report)
     case_store.put(case)
 
@@ -385,7 +398,9 @@ async def report_disruption(report: DisruptionReport):
 
 
 @api.get("/cases/{case_id}")
-async def get_case(case_id: str):
+async def get_case(
+    case_id: str = Path(..., pattern=CASE_ID_PATTERN, description="Case ID"),
+):
     case = case_store.get(case_id)
     if case is None:
         raise HTTPException(404, f"Case {case_id} not found")
@@ -398,7 +413,10 @@ async def list_cases():
 
 
 @api.post("/cases/{case_id}/approve")
-async def approve_option(case_id: str, approval: ApprovalRequest):
+async def approve_option(
+    approval: ApprovalRequest,
+    case_id: str = Path(..., pattern=CASE_ID_PATTERN, description="Case ID"),
+):
     case = case_store.get(case_id)
     if case is None:
         raise HTTPException(404, f"Case {case_id} not found")
@@ -505,9 +523,13 @@ async def evidence_drilldown(
 
 
 @api.get("/audit/{production_id}")
-async def get_audit(production_id: str):
+async def get_audit(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+):
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured. Add credentials to backend/.env.")
+    if not await clickhouse_client.production_exists(production_id):
+        raise HTTPException(404, f"Production {production_id} not found.")
     try:
         return await clickhouse_client.fetch_audit(production_id)
     except Exception as exc:  # noqa: BLE001
@@ -516,7 +538,9 @@ async def get_audit(production_id: str):
 
 
 @api.post("/demo/reset")
-async def reset_demo(production_id: str | None = None):
+async def reset_demo(
+    production_id: str | None = Query(None, pattern=PRODUCTION_ID_PATTERN),
+):
     """Restore the clean pre-disruption baseline for a production (or all).
 
     With `?production_id=...` only that production's event rows and in-memory
@@ -524,6 +548,8 @@ async def reset_demo(production_id: str | None = None):
     The baseline schedule itself is never modified (overlay pattern)."""
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured.")
+    if production_id and not await clickhouse_client.production_exists(production_id):
+        raise HTTPException(404, f"Production '{production_id}' not found")
     try:
         await clickhouse_client.reset_demo_events(production_id)
     except Exception as exc:  # noqa: BLE001
@@ -532,6 +558,8 @@ async def reset_demo(production_id: str | None = None):
     cleared = case_store.clear(production_id)
     logger.info("Demo reset (scope=%s): events cleared, %d in-memory cases cleared",
                 production_id or "all", cleared)
+    return {"status": "ok", "cleared_cases": cleared, "production_id": production_id}
+
 @api.get("/geo/resolve")
 async def resolve_geo(
     query: str,
@@ -564,9 +592,9 @@ app.add_middleware(
 )
 
 
-def _frontend_build_dir() -> Path:
+def _frontend_build_dir() -> FilePath:
     configured = os.environ.get("FRONTEND_BUILD_DIR", "../frontend/build")
-    build_dir = Path(configured)
+    build_dir = FilePath(configured)
     return build_dir if build_dir.is_absolute() else (ROOT_DIR / build_dir).resolve()
 
 
@@ -600,7 +628,7 @@ async def shutdown():
 
 
 async def _warmup_gemini():
-    marker = Path("/tmp/.gemini_warmup")
+    marker = FilePath("/tmp/.gemini_warmup")
     try:
         import time as _time
 

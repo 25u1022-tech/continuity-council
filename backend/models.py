@@ -54,9 +54,9 @@ AGENT_DISPLAY = {
 # Requests
 # ---------------------------------------------------------------------------
 class DisruptionReport(BaseModel):
-    production_id: str = "prod_001"
+    production_id: str = Field("prod_001", min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$")
     disruption_type: DisruptionType
-    affected_day: int = Field(ge=1, le=365)
+    affected_day: int = Field(ge=1, le=3650)
     affected_cast_id: str = ""
     affected_location_id: str = ""
     severity: Severity = "high"
