@@ -76,6 +76,23 @@ class ApprovalRequest(BaseModel):
     approved_by: str = "producer"
 
 
+class ChatSource(BaseModel):
+    type: str = "mcp_query"
+    query: str
+    result_summary: str
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    production_id: str = Field("prod_001", min_length=1, max_length=64)
+    case_id: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[ChatSource] = []
+
+
 # ---------------------------------------------------------------------------
 # Production onboarding (create-your-own production)
 # ---------------------------------------------------------------------------

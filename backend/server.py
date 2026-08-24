@@ -20,9 +20,12 @@ ROOT_DIR = FilePath(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import case_store  # noqa: E402
-from agents import auditor, orchestrator  # noqa: E402
-from models import (  # noqa: E402
+from agents import auditor, orchestrator
+from agents.council_chatbot import CouncilChatbot
+from models import (
     ApprovalRequest,
+    ChatRequest,
+    ChatResponse,
     CreateProductionRequest,
     DisruptionReport,
     DisruptionType,
@@ -579,6 +582,34 @@ async def resolve_geo(
 async def get_country_factor_endpoint(country_code: str):
     """Get World Bank GDP PPP country factor for a country code."""
     return await geo_service.get_country_factor(country_code)
+
+
+@api.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(req: ChatRequest):
+    """Producer-facing conversational interface to ask questions about council reasoning."""
+    chatbot = CouncilChatbot()
+    try:
+        res = await asyncio.wait_for(
+            chatbot.ask(
+                question=req.message,
+                production_id=req.production_id,
+                case_id=req.case_id,
+            ),
+            timeout=8.0,
+        )
+        return res
+    except asyncio.TimeoutError:
+        logger.warning("Chatbot request timed out after 8.0s")
+        return {
+            "answer": "The council reasoning engine encountered a timeout (8.0s SLA limit). Please refine your query or try again.",
+            "sources": [],
+        }
+    except Exception as exc:
+        logger.exception("Chatbot request failed: %s", exc)
+        return {
+            "answer": f"An error occurred while querying council reasoning: {str(exc)[:150]}",
+            "sources": [],
+        }
 
 
 app.include_router(api)

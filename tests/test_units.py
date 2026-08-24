@@ -1256,3 +1256,103 @@ class TestPR4AuditBugs:
         )
 
 
+# ---------------------------------------------------------------------------
+# Council Chatbot Unit & API Tests
+# ---------------------------------------------------------------------------
+class TestCouncilChatbot:
+    def test_chatbot_answers_reasoning_question_with_sources(self, case):
+        import asyncio
+        import case_store
+        from agents.council_chatbot import CouncilChatbot
+        from models import RecoveryOption
+
+        case.options = [
+            RecoveryOption(
+                option_id="opt_cover",
+                name="Shoot Cover Scenes",
+                strategy="shoot_cover_scenes",
+                rank=1,
+                recommended=True,
+                estimated_cost_usd=4500,
+                estimated_delay_hours=2.0,
+                score=92.5,
+                compliance_valid=True,
+            )
+        ]
+        case_store.put(case)
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(
+            chatbot.ask(
+                "Why was the top option chosen?",
+                production_id=case.production_id,
+                case_id=case.case_id,
+            )
+        )
+
+        assert "Shoot Cover Scenes" in res["answer"] or "Rank 1" in res["answer"] or "score" in res["answer"].lower()
+        assert len(res["sources"]) > 0
+        assert res["sources"][0]["type"] == "mcp_query"
+        assert "SELECT" in res["sources"][0]["query"]
+
+    def test_chatbot_rejects_off_topic_questions(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot, OFF_TOPIC_REJECTION
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("What is the capital of France?"))
+        assert res["answer"] == OFF_TOPIC_REJECTION
+        assert len(res["sources"]) == 0
+
+        res2 = asyncio.run(chatbot.ask("Write python code for quicksort"))
+        assert res2["answer"] == OFF_TOPIC_REJECTION
+        assert len(res2["sources"]) == 0
+
+    def test_chatbot_historical_weather_query(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("Show me historical weather disruptions for this location."))
+        assert "ClickHouse" in res["answer"] or "historical" in res["answer"].lower() or "disruption" in res["answer"].lower()
+        assert len(res["sources"]) > 0
+        assert any("weather_delay" in s["query"] or "disruption_history" in s["query"] for s in res["sources"])
+
+    def test_chat_api_endpoint(self, case):
+        import case_store
+        from fastapi.testclient import TestClient
+        from server import app
+        from models import RecoveryOption
+
+        case.options = [
+            RecoveryOption(
+                option_id="opt_cover",
+                name="Option A: Shoot Cover Scenes",
+                strategy="shoot_cover_scenes",
+                rank=1,
+                recommended=True,
+                estimated_cost_usd=5000,
+                estimated_delay_hours=1.5,
+                score=94.0,
+                compliance_valid=True,
+            )
+        ]
+        case_store.put(case)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/chat",
+            json={
+                "message": "What evidence supports Option A?",
+                "production_id": case.production_id,
+                "case_id": case.case_id,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert isinstance(data["sources"], list)
+        assert len(data["sources"]) > 0
+
+
+

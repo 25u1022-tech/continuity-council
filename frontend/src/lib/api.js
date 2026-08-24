@@ -90,6 +90,12 @@ export const resetDemo = (productionId) =>
     { method: "POST" }
   );
 
+export const sendChatMessage = ({ message, production_id, case_id }) =>
+  request("/chat", {
+    method: "POST",
+    body: { message, production_id, case_id: case_id || undefined },
+  });
+
 // --- Production onboarding ---------------------------------------------------
 export const listProductions = () => request("/productions");
 export const createProduction = (payload) =>

@@ -16,6 +16,7 @@ import { ActivityTicker } from "../ActivityTicker";
 import { useProduction } from "../../context/ProductionContext";
 import { useTheme } from "../../context/ThemeContext";
 import { CreateProductionWizard } from "../CreateProductionWizard";
+import { CouncilChatbot } from "../CouncilChatbot";
 import { safeStorage } from "../../lib/storage";
 import {
   Clapperboard,
@@ -332,6 +333,11 @@ export const Shell = ({ children, activeCase }) => {
         open={wizardOpen}
         onOpenChange={setWizardOpen}
         onCreated={handleCreated}
+      />
+
+      <CouncilChatbot
+        productionId={selectedId}
+        caseId={activeCase?.case_id}
       />
     </div>
   );
