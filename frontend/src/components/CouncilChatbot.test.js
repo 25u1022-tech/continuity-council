@@ -32,7 +32,7 @@ describe("CouncilChatbot Component", () => {
     expect(PREFILLED_PROMPTS).toContain("Why was the top option chosen?");
     expect(PREFILLED_PROMPTS).toContain("What do the live signals mean?");
     expect(PREFILLED_PROMPTS).toContain("Show me the decision ledger.");
-    expect(INITIAL_MESSAGE.text).toContain("Continuity Council assistant");
+    expect(INITIAL_MESSAGE.text).toContain("council assistant");
   });
 
   test("renders floating action button (FAB) in DOM", async () => {

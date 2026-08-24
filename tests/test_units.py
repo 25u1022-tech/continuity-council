@@ -1260,6 +1260,45 @@ class TestPR4AuditBugs:
 # Council Chatbot Unit & API Tests
 # ---------------------------------------------------------------------------
 class TestCouncilChatbot:
+    def test_chatbot_greeting_zero_tool_calls(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot, GREETING_RESPONSE
+
+        chatbot = CouncilChatbot()
+        for query in ["Hi", "hello", "Hey there!", "Thanks!", "thank you"]:
+            res = asyncio.run(chatbot.ask(query))
+            assert "council assistant" in res["answer"].lower() or "help" in res["answer"].lower()
+            assert len(res["sources"]) == 0
+
+    def test_chatbot_general_answers_cover_set_and_any_question(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        # 1. Film glossary query
+        res = asyncio.run(chatbot.ask("What is a cover set?"))
+        assert "cover set" in res["answer"].lower()
+        assert len(res["sources"]) == 0
+        assert "1. 1." not in res["answer"]
+
+        # 2. General trivia / knowledge query
+        res2 = asyncio.run(chatbot.ask("What is the capital of France?"))
+        assert len(res2["answer"]) > 10
+        assert len(res2["sources"]) == 0
+        assert "1. 1." not in res2["answer"]
+
+    def test_chatbot_howto_step_by_step_from_help_kb(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("How do I report a disruption?"))
+        assert "Report disruption" in res["answer"]
+        assert len(res["sources"]) == 0
+        assert "1." in res["answer"]
+        assert "1. 1." not in res["answer"]
+        assert any(s in res["answer"].lower() for s in ["shall i", "would you like", "help"])
+
     def test_chatbot_answers_reasoning_question_with_sources(self, case):
         import asyncio
         import case_store
@@ -1294,19 +1333,8 @@ class TestCouncilChatbot:
         assert len(res["sources"]) > 0
         assert res["sources"][0]["type"] == "mcp_query"
         assert "SELECT" in res["sources"][0]["query"]
-
-    def test_chatbot_rejects_off_topic_questions(self):
-        import asyncio
-        from agents.council_chatbot import CouncilChatbot, OFF_TOPIC_REJECTION
-
-        chatbot = CouncilChatbot()
-        res = asyncio.run(chatbot.ask("What is the capital of France?"))
-        assert res["answer"] == OFF_TOPIC_REJECTION
-        assert len(res["sources"]) == 0
-
-        res2 = asyncio.run(chatbot.ask("Write python code for quicksort"))
-        assert res2["answer"] == OFF_TOPIC_REJECTION
-        assert len(res2["sources"]) == 0
+        assert "1. 1." not in res["answer"]
+        assert "6.199999" not in res["answer"]
 
     def test_chatbot_historical_weather_query(self):
         import asyncio
@@ -1392,6 +1420,22 @@ class TestCouncilChatbot:
             assert len(res["answer"]) > 50
             # Must end with a kind next-step suggestion
             assert any(s in res["answer"].lower() for s in ["shall i", "would you like", "feel free", "help you"])
+            assert "1. 1." not in res["answer"]
+
+    def test_chatbot_failure_path_kind_message(self):
+        from fastapi.testclient import TestClient
+        from server import app
+        from unittest.mock import patch
+
+        client = TestClient(app)
+        with patch("agents.council_chatbot.CouncilChatbot.ask", side_effect=Exception("Database connection timed out")):
+            resp = client.post("/api/chat", json={"message": "Why was Option A chosen?"})
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "having a little trouble" in data["answer"].lower()
+            assert "Database connection timed out" not in data["answer"]
+            assert data["sources"] == []
+
 
 
 

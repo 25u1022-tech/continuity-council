@@ -23,7 +23,7 @@ export const PREFILLED_PROMPTS = [
 export const INITIAL_MESSAGE = {
   id: "init",
   sender: "ai",
-  text: "Hello! I'm your Continuity Council assistant. I'm here to help guide you through every step of your production recovery, explain the council's reasoning, and explore historical ClickHouse evidence. How can I help you today?",
+  text: "Hi there! I'm your council assistant — I can walk you through reporting a disruption, explain any recommendation, or answer anything else on your mind. What can I help you with today?",
   sources: [],
   timestamp: new Date(),
 };
@@ -114,8 +114,11 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
     if (!text) return null;
     const lines = text.split("\n");
     return lines.map((line, idx) => {
+      const isBullet = line.startsWith("• ") || line.startsWith("- ") || line.startsWith("* ");
+      const rawText = isBullet ? line.replace(/^(\s*[•\-\*]\s*)/, "") : line;
+
       // Bold rendering **text**
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+      const parts = rawText.split(/(\*\*.*?\*\*)/g);
       const formattedLine = parts.map((part, pIdx) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
@@ -137,7 +140,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         return part;
       });
 
-      if (line.startsWith("- ") || line.startsWith("* ")) {
+      if (isBullet) {
         return (
           <li key={idx} className="ml-4 list-disc text-[12.5px] leading-relaxed">
             {formattedLine}
@@ -358,7 +361,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about option ranking or ClickHouse data..."
+                placeholder="Ask me anything — I'm here to help…"
                 disabled={loading}
                 className="flex-1 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3.5 py-2 text-[12.5px] text-[var(--cc-text-primary)] placeholder-[var(--cc-text-quaternary)] focus:border-[var(--cc-text-primary)] focus:outline-none transition-colors"
               />
