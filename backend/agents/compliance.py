@@ -68,9 +68,9 @@ def validate_compliance(
         from_loc = ch.from_location
         to_loc = ch.to_location
         if from_loc and to_loc and from_loc != to_loc and ch.from_day == ch.to_day:
-            lat1, lon1 = loc_coords.get(from_loc, (0.0, 0.0))
-            lat2, lon2 = loc_coords.get(to_loc, (0.0, 0.0))
-            if lat1 and lon1 and lat2 and lon2:
+            lat1, lon1 = loc_coords.get(from_loc, (None, None))
+            lat2, lon2 = loc_coords.get(to_loc, (None, None))
+            if lat1 is not None and lon1 is not None and lat2 is not None and lon2 is not None:
                 dist = haversine_miles(lat1, lon1, lat2, lon2)
                 option.transit_distance_miles = max(option.transit_distance_miles, dist)
                 if dist > 100.0:

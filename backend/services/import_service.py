@@ -72,13 +72,28 @@ def normalize_string_key(val: str) -> str:
 
 
 def parse_date(val: str) -> Optional[datetime]:
-    """Parse various date formats between years 2000 and 2030."""
+    """Parse various date formats between years 2000 and 2030, including ISO 8601 with milliseconds."""
     val = val.strip()
+    # 1. Try ISO 8601 parsing (handles milliseconds .sss, Z suffix, +00:00 offset)
+    try:
+        iso_str = val.replace("Z", "+00:00") if val.endswith("Z") else val
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        if 2000 <= dt.year <= 2030:
+            return dt
+    except ValueError:
+        pass
+
+    # 2. Try explicit strptime formats
     for fmt in (
         "%Y-%m-%d",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
         "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
         "%m/%d/%Y",
         "%d/%m/%Y",
         "%Y/%m/%d",

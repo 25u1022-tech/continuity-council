@@ -154,7 +154,7 @@ def build_query(template_id: str, params: Dict[str, Any]) -> str:
             raise UnsafeQueryError(f"severity '{severity}' is not in {sorted(ALLOWED_SEVERITIES)}")
         sql = mv_select + f" AND severity = '{severity}'"
     elif template_id == "studio_strategy_performance":
-        studio_id = _clean_identifier(str(params.get("studio_id", "global")))
+        studio_id = _clean_identifier(str(params.get("studio_id") or "global"))
         sql = studio_select + f" AND studio_id = '{studio_id}'"
         severity = str(params.get("severity", "") or "").strip()
         if severity:

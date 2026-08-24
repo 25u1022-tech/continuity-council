@@ -114,7 +114,7 @@ async def check_c_gemini() -> bool:
     api_key = os.environ.get("GEMINI_API_KEY", "")
     assert api_key, "GEMINI_API_KEY not set in backend/.env"
     client = genai.Client(api_key=api_key)
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
     # (1) plain structured output
     resp = await client.aio.models.generate_content(

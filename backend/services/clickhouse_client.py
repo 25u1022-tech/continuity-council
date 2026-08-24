@@ -247,31 +247,37 @@ async def list_productions() -> List[Dict[str, Any]]:
     def _fetch():
         c = _get_client()
         db = _db()
-        res = c.query(
-            f"SELECT production_id, title, start_date, total_shoot_days, currency, director, created_at "
-            f"FROM {db}.productions ORDER BY created_at ASC"
+        sql = (
+            f"SELECT "
+            f"  p.production_id, p.title, p.start_date, p.total_shoot_days, p.currency, p.director, p.created_at, "
+            f"  COALESCE(s.scene_cnt, 0) AS scene_count, "
+            f"  COALESCE(cm.cast_cnt, 0) AS cast_count, "
+            f"  COALESCE(l.loc_cnt, 0) AS location_count "
+            f"FROM {db}.productions AS p "
+            f"LEFT JOIN (SELECT production_id, count() AS scene_cnt FROM {db}.production_schedule GROUP BY production_id) AS s "
+            f"  ON p.production_id = s.production_id "
+            f"LEFT JOIN (SELECT production_id, count() AS cast_cnt FROM {db}.cast_members GROUP BY production_id) AS cm "
+            f"  ON p.production_id = cm.production_id "
+            f"LEFT JOIN (SELECT production_id, count() AS loc_cnt FROM {db}.locations GROUP BY production_id) AS l "
+            f"  ON p.production_id = l.production_id "
+            f"ORDER BY p.created_at ASC"
         )
+        res = c.query(sql)
         prods = []
         for r in res.result_rows:
             prods.append({
-                "production_id": r[0], "title": r[1], "start_date": str(r[2]),
-                "total_shoot_days": int(r[3]), "currency": r[4],
-                "director": r[5] if len(r) > 5 else "",
-                "created_at": r[6].isoformat() if len(r) > 6 and r[6] else "",
+                "production_id": r[0],
+                "title": r[1],
+                "start_date": str(r[2]),
+                "total_shoot_days": int(r[3]),
+                "currency": r[4],
+                "director": r[5] if len(r) > 5 and r[5] else "",
+                "created_at": r[6].isoformat() if len(r) > 6 and r[6] and hasattr(r[6], "isoformat") else str(r[6] or ""),
                 "is_demo": r[0] == DEMO_PRODUCTION_ID,
+                "scene_count": int(r[7] or 0),
+                "cast_count": int(r[8] or 0),
+                "location_count": int(r[9] or 0),
             })
-        # Counts per production (single grouped query each — demo scale is tiny)
-        def _counts(table):
-            q = c.query(f"SELECT production_id, COUNT(*) FROM {db}.{table} GROUP BY production_id")
-            return {row[0]: int(row[1]) for row in q.result_rows}
-        scene_counts = _counts("production_schedule")
-        cast_counts = _counts("cast_members")
-        loc_counts = _counts("locations")
-        for p in prods:
-            pid = p["production_id"]
-            p["scene_count"] = scene_counts.get(pid, 0)
-            p["cast_count"] = cast_counts.get(pid, 0)
-            p["location_count"] = loc_counts.get(pid, 0)
         return prods
 
     return await _run(_fetch)

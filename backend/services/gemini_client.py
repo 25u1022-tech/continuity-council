@@ -87,7 +87,7 @@ def is_configured() -> bool:
 
 def model_name() -> str:
     # Prefer fast flash model; allow env override
-    return os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    return os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 def _get_client():
@@ -100,7 +100,7 @@ def _get_client():
 
 
 def _thinking():
-    """Low thinking level for Gemini 3.x/2.5 flash = fast demo-grade latency."""
+    """Low thinking level for Gemini 3.6 flash = fast demo-grade latency."""
     from google.genai import types
 
     try:

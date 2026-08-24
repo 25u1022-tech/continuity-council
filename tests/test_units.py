@@ -966,5 +966,291 @@ class TestGeminiClientQuotaAndResilience:
         assert gc._quota_reset_at is None
 
 
+# ---------------------------------------------------------------------------
+# 9. Batched Productions Query & Dashboard Optimization
+# ---------------------------------------------------------------------------
+class TestBatchedProductionsQuery:
+    def test_list_productions_single_query_execution_and_shape(self, monkeypatch):
+        import asyncio
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone
+        import services.clickhouse_client as ch
+
+        mock_client = MagicMock()
+        mock_result = MagicMock()
+        mock_result.result_rows = [
+            (
+                "prod_001",
+                "The Long Dark Take",
+                "2026-08-19",
+                3,
+                "USD",
+                "Christopher Nolan",
+                datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc),
+                10,
+                4,
+                2,
+            ),
+            (
+                "prod_002",
+                "Iron Horizon",
+                "2026-09-01",
+                45,
+                "EUR",
+                "Denis Villeneuve",
+                datetime(2026, 8, 20, 10, 0, 0, tzinfo=timezone.utc),
+                55,
+                12,
+                8,
+            ),
+        ]
+        mock_client.query = MagicMock(return_value=mock_result)
+        monkeypatch.setattr(ch, "_get_client", lambda: mock_client)
+
+        prods = asyncio.run(ch.list_productions())
+
+        # Exact single round trip executed
+        assert mock_client.query.call_count == 1
+        query_sql = mock_client.query.call_args[0][0]
+        assert "LEFT JOIN" in query_sql
+        assert "production_schedule" in query_sql
+        assert "cast_members" in query_sql
+        assert "locations" in query_sql
+
+        # Validate shape and data accuracy
+        assert len(prods) == 2
+        p1 = prods[0]
+        assert p1["production_id"] == "prod_001"
+        assert p1["title"] == "The Long Dark Take"
+        assert p1["total_shoot_days"] == 3
+        assert p1["currency"] == "USD"
+        assert p1["director"] == "Christopher Nolan"
+        assert p1["is_demo"] is True
+        assert p1["scene_count"] == 10
+        assert p1["cast_count"] == 4
+        assert p1["location_count"] == 2
+
+        p2 = prods[1]
+        assert p2["production_id"] == "prod_002"
+        assert p2["title"] == "Iron Horizon"
+        assert p2["total_shoot_days"] == 45
+        assert p2["is_demo"] is False
+        assert p2["scene_count"] == 55
+        assert p2["cast_count"] == 12
+        assert p2["location_count"] == 8
+
+
+# ---------------------------------------------------------------------------
+# 10. PR #4 Audit — Failing tests (bugs found, not yet fixed)
+# ---------------------------------------------------------------------------
+class TestPR4AuditBugs:
+    """Failing tests that demonstrate real bugs found in the PR #4 audit.
+
+    Each test is written to FAIL against the current unpatched code.
+    After the corresponding fix is applied, the test will pass.
+    """
+
+    # --- Bug 1: Last shoot day disruption generates no-op scene changes ----
+    def test_last_shoot_day_disruption_does_not_produce_noop_move(self):
+        """When affected_day == total_shoot_days, _later_day() returns
+        total_shoot_days (same value). Every option that calls to_day produces
+        SceneChange(from_day=N, to_day=N) — a move that changes nothing.
+        Compliance passes it silently, so the option looks valid but is a no-op.
+
+        Bug location: backend/agents/schedule_optimizer.py line 30.
+        """
+        from agents.schedule_optimizer import generate_schedule_options
+        from models import DisruptionReport, new_case
+
+        total_days = 3
+        disruption_day = total_days  # last day — triggers the bug
+
+        last_day_bundle = {
+            "production": {
+                "production_id": "prod_test",
+                "title": "Last Day Test",
+                "total_shoot_days": total_days,
+                "start_date": "2026-01-01",
+                "currency": "USD",
+            },
+            "locations": [
+                {"location_id": "stage_a", "name": "Stage A",
+                 "location_type": "stage", "capacity": 100, "notes": ""},
+            ],
+            "cast_members": [
+                {"cast_id": "lead_001", "name": "Mara Voss", "role_type": "lead"},
+            ],
+            "scenes": [
+                {"scene_id": "sc_01", "scene_title": "Climax",
+                 "shoot_day": disruption_day, "sequence_order": 1,
+                 "location_id": "stage_a", "required_cast": ["lead_001"],
+                 "scene_type": "interior", "is_cover_scene": False,
+                 "priority": 1, "continuity_tags": [], "depends_on": [],
+                 "status": "scheduled"},
+                {"scene_id": "sc_02", "scene_title": "Cover",
+                 "shoot_day": 1, "sequence_order": 2,
+                 "location_id": "stage_a", "required_cast": [],
+                 "scene_type": "cover", "is_cover_scene": True,
+                 "priority": 4, "continuity_tags": [], "depends_on": [],
+                 "status": "scheduled"},
+            ],
+            "location_availability": [
+                {"location_id": "stage_a", "shoot_day": d,
+                 "available": True, "notes": ""}
+                for d in range(1, total_days + 1)
+            ],
+            "cast_availability": [
+                {"cast_id": "lead_001", "shoot_day": d,
+                 "available": True, "reason": ""}
+                for d in range(1, total_days + 1)
+            ],
+        }
+
+        case = new_case(DisruptionReport(
+            production_id="prod_test",
+            disruption_type="lead_actor_unavailable",
+            affected_day=disruption_day,
+            affected_cast_id="lead_001",
+            severity="high",
+        ))
+        options = generate_schedule_options(case, last_day_bundle)
+
+        # BUG: options contain SceneChange objects where from_day == to_day
+        noop_changes = [
+            ch
+            for opt in options
+            for ch in opt.scene_changes
+            if ch.from_day == ch.to_day
+        ]
+        # This assertion FAILS before fix:
+        assert len(noop_changes) == 0, (
+            f"Bug: {len(noop_changes)} no-op scene change(s) with from_day == to_day "
+            f"(disruption on last shoot day {disruption_day}/{total_days}). "
+            "Schedule Optimizer must not generate changes that don't move a scene."
+        )
+
+    # --- Bug 2: Compliance transit check bypassed for lon=0.0 / lat=0.0 ---
+    def test_transit_distance_checked_when_longitude_is_zero(self):
+        """In compliance.py line 73: `if lat1 and lon1 and lat2 and lon2:`
+        evaluates 0.0 as falsy. For locations on the Prime Meridian
+        (e.g., Greenwich UK at lon=0.0) or Equator (lat=0.0), transit calculation
+        is bypassed, and transit >100mi violations are silently ignored.
+
+        Bug location: backend/agents/compliance.py line 73.
+        """
+        from agents.compliance import validate_compliance
+        from models import DisruptionReport, RecoveryOption, SceneChange, new_case
+
+        # Location 1: Greenwich, London (lat 51.48, lon 0.0)
+        # Location 2: Manchester UK (lat 53.48, lon -2.24) -> ~160 miles away
+        transit_bundle = {
+            "production": {
+                "production_id": "prod_uk",
+                "title": "UK Shoot",
+                "total_shoot_days": 3,
+                "start_date": "2026-01-01",
+                "currency": "GBP",
+            },
+            "locations": [
+                {"location_id": "loc_greenwich", "name": "Greenwich Stage",
+                 "location_type": "interior", "capacity": 100,
+                 "latitude": 51.48, "longitude": 0.0, "notes": ""},
+                {"location_id": "loc_manchester", "name": "Manchester Docks",
+                 "location_type": "exterior", "capacity": 100,
+                 "latitude": 53.48, "longitude": -2.24, "notes": ""},
+            ],
+            "cast_members": [
+                {"cast_id": "lead_001", "name": "Dev", "role_type": "lead"},
+            ],
+            "scenes": [
+                {"scene_id": "sc_10", "scene_title": "Docks Scene",
+                 "shoot_day": 1, "sequence_order": 1,
+                 "location_id": "loc_greenwich", "required_cast": ["lead_001"],
+                 "scene_type": "interior", "is_cover_scene": False,
+                 "priority": 1, "continuity_tags": [], "depends_on": [],
+                 "status": "scheduled"},
+            ],
+            "location_availability": [
+                {"location_id": loc, "shoot_day": d, "available": True, "notes": ""}
+                for loc in ("loc_greenwich", "loc_manchester")
+                for d in (1, 2, 3)
+            ],
+            "cast_availability": [
+                {"cast_id": "lead_001", "shoot_day": d, "available": True, "reason": ""}
+                for d in (1, 2, 3)
+            ],
+        }
+
+        case = new_case(DisruptionReport(
+            production_id="prod_uk",
+            disruption_type="location_unavailable",
+            affected_day=1,
+            affected_location_id="loc_greenwich",
+            severity="high",
+        ))
+
+        # Propose same-day move from Greenwich (lon=0.0) to Manchester (~160 mi away)
+        option = RecoveryOption(
+            option_id="opt_move_manchester",
+            name="Move to Manchester",
+            strategy="swap_locations",
+            scene_changes=[
+                SceneChange(
+                    scene_id="sc_10",
+                    from_day=1,
+                    to_day=1,
+                    from_location="loc_greenwich",
+                    to_location="loc_manchester",
+                    change_type="move_scene_location",
+                )
+            ],
+        )
+
+        valid, warnings, risk_score = validate_compliance(case, option, transit_bundle)
+
+        # BUG: valid is True because lon1=0.0 evaluated as False, skipping the 100mi transit check.
+        # This assertion FAILS before fix:
+        assert valid is False, (
+            "Bug: validate_compliance passed a 160-mile same-day location swap because "
+            "Greenwich longitude (0.0) was treated as falsy in `if lat1 and lon1 and lat2 and lon2:`. "
+            "It must fail compliance with a transit distance warning."
+        )
+
+    # --- Bug 3: CSV import parse_date rejects ISO timestamps with milliseconds ---
+    def test_import_csv_accepts_iso_timestamps_with_milliseconds(self):
+        """Standard ISO timestamps exported from modern JS tools (e.g. toISOString())
+        have format 'YYYY-MM-DDTHH:mm:ss.sssZ'. parse_date() fails on these, causing
+        valid CSV rows to be rejected.
+
+        Bug location: backend/services/import_service.py lines 74-92.
+        """
+        from services.import_service import parse_date
+
+        iso_with_ms = "2026-08-24T14:30:00.000Z"
+        parsed = parse_date(iso_with_ms)
+
+        # BUG: parse_date returns None because '%Y-%m-%dT%H:%M:%S.%fZ' is not in formats
+        assert parsed is not None, (
+            f"Bug: parse_date failed to parse standard ISO 8601 timestamp with milliseconds: '{iso_with_ms}'"
+        )
+
+    # --- Bug 4: Safe query builder crashes on empty studio_id in studio_strategy_performance ---
+    def test_studio_strategy_performance_handles_empty_studio_id(self):
+        """When params contains {'studio_id': ''} (e.g., from unassigned production),
+        params.get('studio_id', 'global') evaluates to '' (in dict).
+        _clean_identifier('') then raises UnsafeQueryError instead of defaulting to 'global'.
+
+        Bug location: backend/services/safe_query_builder.py line 157.
+        """
+        from services.safe_query_builder import build_query
+
+        # Should safely default to 'global' or generate valid query without raising UnsafeQueryError
+        query = build_query(
+            "studio_strategy_performance",
+            {"disruption_type": "weather_delay", "studio_id": ""},
+        )
+        assert "studio_id = 'global'" in query, (
+            f"Bug: build_query failed to default empty studio_id to 'global'. Generated: {query}"
+        )
 
 
