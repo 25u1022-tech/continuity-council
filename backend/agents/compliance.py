@@ -1,4 +1,4 @@
-"""Compliance Agent — deterministic constraint solver (no LLM in the hot path).
+"""Compliance Agent — deterministic constraint solver (ADK Agent).
 
 Validates every recovery option BEFORE the Orchestrator ranks it:
   1. Location availability on the proposed day
@@ -6,11 +6,19 @@ Validates every recovery option BEFORE the Orchestrator ranks it:
   3. Shoot-day bounds (1..total_shoot_days)
   4. Dependency ordering feasibility
   5. Working-hour proxy: max scenes per day
+  6. Geographic transit distance (>100 miles same-day limit)
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Dict, List, Tuple
+import os
+from typing import Any, Dict, List, Optional, Tuple
+
+from google.adk import Agent, Runner
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.adk.tools.function_tool import FunctionTool
+from google.genai import types
 
 from models import CaseState, RecoveryOption
 from services.geo_service import haversine_miles
@@ -148,6 +156,61 @@ def validate_compliance(
     return (not hard_fail), warnings, round(risk, 2)
 
 
+# ---------------------------------------------------------------------------
+# ADK Tool & Agent Wrappers
+# ---------------------------------------------------------------------------
+async def validate_compliance_rules_tool(
+    case_data: Dict[str, Any],
+    options: List[Dict[str, Any]],
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Validates operational feasibility, cast/location availability, and geographic transit rules.
+
+    Args:
+        case_data: Serialized CaseState dictionary.
+        options: List of serialized RecoveryOption dicts.
+        bundle: Serialized schedule bundle with scenes, locations, and availability schedules.
+    """
+    case = CaseState(**case_data)
+    option_models = [RecoveryOption(**o) for o in options]
+    invalid_count = 0
+    for opt in option_models:
+        valid, warnings, risk = validate_compliance(case, opt, bundle)
+        opt.compliance_valid = valid
+        opt.compliance_warnings = warnings[:5]
+        opt.compliance_risk_score = risk
+        if not valid:
+            invalid_count += 1
+
+    return {
+        "invalid_count": invalid_count,
+        "valid_count": len(option_models) - invalid_count,
+        "summary": f"Validated {len(option_models)} options — {invalid_count} blocked by hard constraints",
+        "evaluated_options": [o.model_dump() for o in option_models],
+    }
+
+
+compliance_tool = FunctionTool(validate_compliance_rules_tool)
+
+
+def create_compliance_agent(model_name: Optional[str] = None) -> Agent:
+    """Instantiate the ADK Compliance Agent."""
+    model = model_name or os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+    return Agent(
+        name="compliance_agent",
+        model=model,
+        instruction=(
+            "You are the Compliance Agent for the Continuity Council film production system. "
+            "Execute the `validate_compliance_rules_tool` to ensure candidate recovery options satisfy "
+            "location permits, cast union availability, working-hour limits, and geographic transit constraints."
+        ),
+        tools=[compliance_tool],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator Compatibility Entry Point
+# ---------------------------------------------------------------------------
 async def run(case: CaseState, options: List[RecoveryOption], bundle: Dict[str, Any]) -> str:
     invalid = 0
     for option in options:

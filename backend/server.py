@@ -20,9 +20,8 @@ ROOT_DIR = FilePath(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import case_store  # noqa: E402
-from agents import auditor, orchestrator
-from agents.council_chatbot import CouncilChatbot
-from models import (
+from agents.council_chatbot import CouncilChatbot  # noqa: E402
+from models import (  # noqa: E402
     ApprovalRequest,
     ChatRequest,
     ChatResponse,
@@ -395,6 +394,7 @@ async def report_disruption(report: DisruptionReport):
     except Exception as exc:  # noqa: BLE001
         logger.warning("disruption_cases insert failed (continuing): %s", exc)
 
+    from agents import orchestrator
     asyncio.create_task(orchestrator.run_investigation(case.case_id))
     logger.info("Case %s created for %s", case.case_id, report.disruption_type)
     return {"case_id": case.case_id, "status": case.status}
@@ -429,6 +429,7 @@ async def approve_option(
     if option is None:
         raise HTTPException(404, f"Option {approval.option_id} not found on case {case_id}")
 
+    from agents import auditor
     case.touch_stage("OPTION_APPROVED")
     case.agent_start("auditor", "Writing decision ledger to ClickHouse…")
     try:

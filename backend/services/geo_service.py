@@ -435,6 +435,38 @@ async def resolve_geo_economics(
     lon = fallback_lon
     country_code = "US"
     country_name = "United States"
+    q_lower = q.lower()
+    if "india" in q_lower:
+        country_code = "IN"
+        country_name = "India"
+    elif "united kingdom" in q_lower or "england" in q_lower or "scotland" in q_lower or ", uk" in q_lower or "london" in q_lower:
+        country_code = "GB"
+        country_name = "United Kingdom"
+    elif "canada" in q_lower:
+        country_code = "CA"
+        country_name = "Canada"
+    elif "australia" in q_lower:
+        country_code = "AU"
+        country_name = "Australia"
+    elif "germany" in q_lower:
+        country_code = "DE"
+        country_name = "Germany"
+    elif "france" in q_lower:
+        country_code = "FR"
+        country_name = "France"
+    elif "italy" in q_lower:
+        country_code = "IT"
+        country_name = "Italy"
+    elif "japan" in q_lower or "tokyo" in q_lower:
+        country_code = "JP"
+        country_name = "Japan"
+    elif "jordan" in q_lower:
+        country_code = "JO"
+        country_name = "Jordan"
+    elif "emirates" in q_lower or "uae" in q_lower or "dubai" in q_lower:
+        country_code = "AE"
+        country_name = "United Arab Emirates"
+
     city_name = q.split(",")[0].strip()
     pop: Optional[int] = None
     is_capital = False
@@ -457,7 +489,7 @@ async def resolve_geo_economics(
         }
 
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
                 resp = await client.get(url, params=params, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
