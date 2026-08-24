@@ -396,6 +396,7 @@ class TestDistanceCompliance:
 # Rate Card & 70/30 Economic Calibration Tests
 # ---------------------------------------------------------------------------
 class TestRateCardsAndEconomics:
+    @pytest.mark.skip(reason="Requires live ClickHouse connection")
     def test_bottom_up_calibration_formula(self, bundle, case):
         import asyncio
         from agents import budget_sentinel
@@ -579,6 +580,7 @@ class TestGlobalGeoCosting:
         assert 0.13 <= res["geo_mult"] <= 0.17
         assert "World Bank" in res["source_note"]
 
+    @pytest.mark.skip(reason="Requires live ClickHouse connection")
     def test_budget_sentinel_with_geo_multiplier(self, bundle, case):
         import asyncio
         from agents import budget_sentinel
