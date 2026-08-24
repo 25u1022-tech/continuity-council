@@ -61,6 +61,27 @@ Orchestrator Agent ──── typed async state machine (Pydantic)
 5. `scripts/test_mcp.py` — standalone on-camera proof: spawns the MCP server, runs the evidence query, prints rows + latency.
 6. MCP layer is **read-only** (`CLICKHOUSE_ALLOW_WRITE_ACCESS=false`); ledger writes use `clickhouse-connect` directly (append-only event tables).
 
+## 🤖 Built with Google Agent Development Kit (ADK)
+
+Continuity Council is engineered on Google's **Agent Development Kit (ADK)** (`google-adk`), orchestrating specialist agents through native hierarchical composition (`SequentialAgent` and `ParallelAgent`). ADK provides predictable state management, typed session memory, robust async generator execution (`runner.run_async`), and production-grade tool calling schemas.
+
+### The 6 ADK Specialist Agents & Roles
+
+- **Orchestrator (`SequentialAgent`)**: Coordinates the top-level recovery pipeline by chaining candidate option generation, parallel multi-agent evaluation, and Gemini-driven executive synthesis.
+- **Budget Sentinel (`Agent` + `FunctionTool`)**: Invokes `query_disruption_history` to query ClickHouse empirical disruption benchmarks through the official `mcp-clickhouse` MCP server with zero SQL injection risk.
+- **Schedule Optimizer (`Agent` + `FunctionTool`)**: Generates candidate slates (`generate_recovery_options_tool`) and polishes recovery plans into crisp, producer-grade descriptions via structured LLM generation.
+- **Continuity Memory (`Agent` + `FunctionTool`)**: Evaluates scene dependency DAGs, narrative order prerequisites, and costume/wardrobe tag splits (`evaluate_continuity_risks_tool`).
+- **Compliance (`Agent` + `FunctionTool`)**: Solves location/cast union availability, working-hour limits, and enforces the 100-mile same-day geographic transit constraint (`validate_compliance_rules_tool`).
+- **Auditor (`Agent` + `FunctionTool`)**: Appends producer-approved recovery decisions and granular scene change records into immutable ClickHouse event tables (`write_decision_ledger_tool`).
+
+### How to Verify (Judge CLI Demo)
+
+Run the judge-facing interactive ADK console demonstration:
+
+```bash
+python backend/scripts/demo_adk_council.py
+```
+
 ## Setup
 
 ### 1. Prerequisites

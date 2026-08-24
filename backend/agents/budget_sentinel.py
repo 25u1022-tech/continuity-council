@@ -1,9 +1,10 @@
-"""Budget Sentinel Agent — the ClickHouse-powered agent (track centerpiece).
+"""Budget Sentinel Agent — the ClickHouse-powered agent (ADK Agent).
 
 Queries the `strategy_performance_mv` materialized view in ClickHouse via the OFFICIAL
 `mcp-clickhouse` MCP server at runtime. The LLM never writes raw SQL.
 
 Enhancements:
+- ADK Agent Architecture with FunctionTool wrapping safe MCP queries
 - Rate card benchmark bottom-up estimation (crew, cast, locations, equipment)
 - Live external signals: Open-Meteo weather risk & Frankfurter/ECB live FX conversion
 - 70% bottom-up + 30% ClickHouse historical evidence calibration
@@ -13,10 +14,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from models import CaseState, CostBreakdown, CostLineItem, EvidenceRow, MCPCall, RecoveryOption
+from google.adk import Agent, Runner
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.adk.tools.function_tool import FunctionTool
+from google.genai import types
+
+from models import (
+    BudgetSentinelResult,
+    CaseState,
+    CostBreakdown,
+    CostLineItem,
+    EvidenceRow,
+    MCPCall,
+    RecoveryOption,
+)
 from services import clickhouse_client
 from services.finance_service import convert_currency, get_exchange_rate
 from services.mcp_client import mcp_run_query
@@ -46,12 +61,174 @@ def _rows_to_evidence(columns: List[str], rows: List[List[Any]]) -> List[Evidenc
     return out
 
 
+# ---------------------------------------------------------------------------
+# ADK FunctionTool: Safe Disruption History Query
+# ---------------------------------------------------------------------------
+async def query_disruption_history(
+    template_id: str,
+    disruption_type: str,
+    severity: Optional[str] = None,
+    studio_id: Optional[str] = "global",
+    strategy: Optional[str] = None,
+    limit: int = 40,
+) -> Dict[str, Any]:
+    """Query ClickHouse historical disruption metrics via safe SQL templates over MCP.
+
+    Args:
+        template_id: Predefined query template ID ('strategy_performance', 'strategy_performance_by_severity', 'studio_strategy_performance', 'raw_history_samples').
+        disruption_type: Disruption classification ('lead_actor_unavailable', 'location_unavailable', 'equipment_failure', 'weather_delay', 'permit_issue', 'supporting_actor_unavailable').
+        severity: Optional severity level ('low', 'medium', 'high').
+        studio_id: Studio identifier for tenant cohort isolation (defaults to 'global').
+        strategy: Optional resolution strategy for raw record drilldown.
+        limit: Maximum rows to return (1-100, default 40).
+    """
+    params: Dict[str, Any] = {"disruption_type": disruption_type}
+    if severity:
+        params["severity"] = severity
+    if studio_id:
+        params["studio_id"] = studio_id
+    if strategy:
+        params["strategy"] = strategy
+    if limit:
+        params["limit"] = limit
+
+    sql = build_query(template_id, params)
+    result = await mcp_run_query(sql)
+    evidence_rows = _rows_to_evidence(result.get("columns", []), result.get("rows", []))
+    return {
+        "sql": sql,
+        "tool": result.get("tool", "run_query"),
+        "latency_ms": result.get("latency_ms", 0),
+        "rows_returned": len(result.get("rows", [])),
+        "evidence_rows": [e.model_dump() for e in evidence_rows],
+    }
+
+
+query_disruption_history_tool = FunctionTool(query_disruption_history)
+
+
+def create_budget_sentinel_agent(model_name: Optional[str] = None) -> Agent:
+    """Instantiate the ADK Budget Sentinel Agent."""
+    model = model_name or os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+    return Agent(
+        name="budget_sentinel_agent",
+        model=model,
+        instruction=(
+            "You are the Budget Sentinel Agent in the Continuity Council film production recovery system. "
+            "Your task is to analyze historical disruption patterns and evaluate economic impacts. "
+            "Use the `query_disruption_history` tool to execute safe queries against the ClickHouse "
+            "materialized view via MCP to retrieve empirical cost, delay, and risk metrics."
+        ),
+        tools=[query_disruption_history_tool],
+    )
+
+
+# ---------------------------------------------------------------------------
+# ADK Execution: Structured Budget Sentinel Investigation
+# ---------------------------------------------------------------------------
+async def run_budget_sentinel_adk(
+    case: CaseState,
+    session_service: Optional[InMemorySessionService] = None,
+) -> BudgetSentinelResult:
+    """Executes the Budget Sentinel via ADK Runner and returns typed BudgetSentinelResult."""
+    if session_service is None:
+        session_service = InMemorySessionService()
+
+    app_name = "budget_sentinel_app"
+    agent = create_budget_sentinel_agent()
+    runner = Runner(
+        app_name=app_name,
+        agent=agent,
+        session_service=session_service,
+    )
+
+    user_id = f"user_{case.case_id}"
+    session_id = f"session_{case.case_id}"
+    await session_service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    d = case.disruption
+    prompt_text = (
+        f"Analyze historical disruption data for Case ID '{case.case_id}': "
+        f"disruption_type='{d.disruption_type}', severity='{d.severity}', studio_id='{case.studio_id or 'global'}'. "
+        f"Call query_disruption_history with template_id='strategy_performance'."
+    )
+    user_message = types.Content(
+        role="user",
+        parts=[types.Part(text=prompt_text)],
+    )
+
+    collected_evidence_rows: List[EvidenceRow] = []
+    collected_narrative: str = ""
+    collected_mcp_calls: List[MCPCall] = []
+
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_message,
+    ):
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.function_response:
+                    fr_dict = part.function_response.response or {}
+                    if isinstance(fr_dict, dict) and "evidence_rows" in fr_dict:
+                        collected_evidence_rows = [
+                            EvidenceRow(**row_dict) for row_dict in fr_dict.get("evidence_rows", [])
+                        ]
+                        sql = fr_dict.get("sql", "")
+                        tool_name = fr_dict.get("tool", "run_query")
+                        latency = fr_dict.get("latency_ms", 0)
+                        rows_cnt = fr_dict.get("rows_returned", len(collected_evidence_rows))
+                        mcp_call = MCPCall(
+                            agent="budget_sentinel",
+                            tool=tool_name,
+                            template_id="strategy_performance",
+                            sql=sql,
+                            rows_returned=rows_cnt,
+                            latency_ms=latency,
+                            status="success",
+                        )
+                        collected_mcp_calls.append(mcp_call)
+                if part.text:
+                    collected_narrative += part.text
+
+    # If ADK run returned evidence, build structured result
+    if collected_evidence_rows:
+        best = collected_evidence_rows[0]
+        worst = collected_evidence_rows[-1]
+        narrative = (
+            f"Across {sum(e.past_cases for e in collected_evidence_rows):,} similar past cases, "
+            f"'{best.resolution_strategy}' averaged ${best.avg_cost_overrun_usd:,.0f} overrun and "
+            f"{best.avg_delay_hours:.1f}h delay, versus ${worst.avg_cost_overrun_usd:,.0f} and "
+            f"{worst.avg_delay_hours:.1f}h for '{worst.resolution_strategy}'. "
+            f"Historical data favors '{best.resolution_strategy}'."
+        )
+    else:
+        narrative = collected_narrative.strip()
+
+    return BudgetSentinelResult(
+        studio_id=case.studio_id or "global",
+        evidence_cohort="global",
+        evidence_footnote=f"industry baseline (n={sum(e.past_cases for e in collected_evidence_rows):,})" if collected_evidence_rows else "",
+        evidence_narrative=narrative,
+        evidence_rows=collected_evidence_rows,
+        mcp_calls=collected_mcp_calls,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator Compatibility Entry Point
+# ---------------------------------------------------------------------------
 async def run(case: CaseState) -> None:
+    """Standard entrypoint called by the Orchestrator."""
     d = case.disruption
     primary_evidence: List[EvidenceRow] = []
 
     async def execute_query(template_id: str, params: Dict[str, Any]) -> List[EvidenceRow]:
-        sql = build_query(template_id, params)  # raises UnsafeQueryError on bad params
+        sql = build_query(template_id, params)
         call = MCPCall(agent="budget_sentinel", template_id=template_id, sql=sql)
         try:
             result = await mcp_run_query(sql)
@@ -262,7 +439,7 @@ async def calibrate_option_economics(
         adj_stage_rate = int(round(stage_day_rate * loc_geo_mult))
         adj_permit_rate = int(round(permit_day_rate * loc_geo_mult))
 
-        # 1. Fetch live signals in parallel (Weather & FX) - zero live geo calls during investigation
+        # 1. Fetch live signals in parallel (Weather & FX)
         w_task = get_weather_risk(loc_lat, loc_lon)
         fx_task = get_exchange_rate(loc_curr, "USD")
         w_res, fx_res = await asyncio.gather(w_task, fx_task)
@@ -333,7 +510,6 @@ async def calibrate_option_economics(
             crew_cost = int(adj_crew_rate * 0.12)
             lines.append(CostLineItem(line="Specialist Unit Setup & Additional Slates (0.12 crew day)", amount_usd=crew_cost, source="Rate card: crew_day (geo-scaled)"))
             lines.append(CostLineItem(line="Production Contingency & Inserts Reserve", amount_usd=int(loc_fee * 0.5 * loc_geo_mult), source="Rate card benchmark"))
-
 
         bottom_up_total = sum(l.amount_usd for l in lines)
 

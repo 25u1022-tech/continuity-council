@@ -1,4 +1,4 @@
-"""Continuity Memory Agent.
+"""Continuity Memory Agent (ADK Agent).
 
 Deterministic continuity-risk detection over scene dependencies, continuity
 tags (costume/emotional state) and narrative order, plus an optional Gemini
@@ -6,8 +6,15 @@ polish pass for producer-readable risk language.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
+
+from google.adk import Agent, Runner
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.adk.tools.function_tool import FunctionTool
+from google.genai import types
 
 from models import CaseState, ContinuityRisk, RecoveryOption
 from services import gemini_client
@@ -87,6 +94,51 @@ def validate_continuity(option: RecoveryOption, scenes: List[Dict[str, Any]]) ->
     option.continuity_risk_score = round(min(0.9, score), 2)
 
 
+# ---------------------------------------------------------------------------
+# ADK Tool & Agent Wrappers
+# ---------------------------------------------------------------------------
+async def evaluate_continuity_risks_tool(
+    options: List[Dict[str, Any]],
+    scenes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Validates narrative dependency order and wardrobe/costume continuity for recovery options.
+
+    Args:
+        options: List of serialized RecoveryOption dicts to validate.
+        scenes: List of serialized production scene dicts containing dependencies and continuity tags.
+    """
+    option_models = [RecoveryOption(**o) for o in options]
+    for opt in option_models:
+        validate_continuity(opt, scenes)
+    flagged = sum(len(o.continuity_risks) for o in option_models)
+    return {
+        "flagged_count": flagged,
+        "summary": f"Flagged {flagged} continuity risk(s) across {len(option_models)} options",
+        "evaluated_options": [o.model_dump() for o in option_models],
+    }
+
+
+continuity_memory_tool = FunctionTool(evaluate_continuity_risks_tool)
+
+
+def create_continuity_memory_agent(model_name: Optional[str] = None) -> Agent:
+    """Instantiate the ADK Continuity Memory Agent."""
+    model = model_name or os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+    return Agent(
+        name="continuity_memory_agent",
+        model=model,
+        instruction=(
+            "You are the Continuity Memory Agent for the Continuity Council film recovery system. "
+            "Execute the `evaluate_continuity_risks_tool` to check for narrative sequence violations, "
+            "costume/makeup continuity breaks, and emotional continuity integrity."
+        ),
+        tools=[continuity_memory_tool],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator Compatibility Entry Point
+# ---------------------------------------------------------------------------
 async def run(case: CaseState, options: List[RecoveryOption], bundle: Dict[str, Any]) -> str:
     scenes = bundle["scenes"]
     for option in options:

@@ -148,6 +148,15 @@ class EvidenceRow(BaseModel):
     footnote: str = ""
 
 
+class BudgetSentinelResult(BaseModel):
+    studio_id: str = "global"
+    evidence_cohort: str = "global"
+    evidence_footnote: str = ""
+    evidence_narrative: str = ""
+    evidence_rows: List[EvidenceRow] = []
+    mcp_calls: List[MCPCall] = []
+
+
 class SceneChange(BaseModel):
     scene_id: str
     scene_title: str = ""

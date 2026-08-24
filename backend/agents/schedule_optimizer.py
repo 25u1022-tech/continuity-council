@@ -1,4 +1,4 @@
-"""Schedule Optimizer Agent.
+"""Schedule Optimizer Agent (ADK Agent).
 
 Deterministically generates 2-4 recovery options from the current schedule
 (scene moves, location swaps, holds), then asks Gemini to polish the option
@@ -6,8 +6,15 @@ descriptions (deterministic fallback text if the LLM is unavailable).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
+
+from google.adk import Agent, Runner
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.adk.tools.function_tool import FunctionTool
+from google.genai import types
 
 from models import CaseState, RecoveryOption, SceneChange
 from services import gemini_client
@@ -44,8 +51,6 @@ def generate_schedule_options(case: CaseState, bundle: Dict[str, Any]) -> List[R
     affected = _affected_scenes(case, scenes)
     case.affected_scene_ids = [s["scene_id"] for s in affected]
     target_day = _alternate_day(case, total_days)
-
-    loc_by_id = {l["location_id"]: l for l in bundle["locations"]}
 
     def mk_change(s: Dict[str, Any], new_day: int, new_loc: str = "") -> SceneChange:
         return SceneChange(
@@ -107,9 +112,6 @@ def generate_schedule_options(case: CaseState, bundle: Dict[str, Any]) -> List[R
             ))
 
     # --- Option B: full day swap (company move) ---
-    # Swap the entire affected day with the target day. Realistic tactic, and it
-    # exposes location-permit constraints (e.g., exteriors forced onto a day
-    # where the permit has lapsed).
     if target_day is not None and target_day != d.affected_day:
         day_a_scenes = [s for s in scenes if s["shoot_day"] == d.affected_day]
         day_b_scenes = [s for s in scenes if s["shoot_day"] == target_day]
@@ -169,3 +171,58 @@ async def polish_descriptions(case: CaseState, options: List[RecoveryOption], bu
                     by_id[oid].description = desc
     except Exception as exc:  # noqa: BLE001
         logger.warning("description polish skipped: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# ADK Tool & Agent Wrappers
+# ---------------------------------------------------------------------------
+async def generate_recovery_options_tool(
+    production_id: str,
+    disruption_type: str,
+    affected_day: int,
+    affected_cast_id: Optional[str] = None,
+    affected_location_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Generates candidate schedule recovery options based on the active production schedule and disruption.
+
+    Args:
+        production_id: Production identifier.
+        disruption_type: Disruption classification.
+        affected_day: Disrupted shoot day index (1-based).
+        affected_cast_id: ID of disrupted cast member if applicable.
+        affected_location_id: ID of disrupted location if applicable.
+    """
+    bundle = await clickhouse_client.get_current_schedule(production_id)
+    if bundle is None:
+        return []
+    from models import DisruptionReport, new_case
+    report = DisruptionReport(
+        production_id=production_id,
+        disruption_type=disruption_type,
+        affected_day=affected_day,
+        affected_cast_id=affected_cast_id,
+        affected_location_id=affected_location_id,
+        reported_by="ADK Tool",
+    )
+    case = new_case(report)
+    opts = generate_schedule_options(case, bundle)
+    await polish_descriptions(case, opts, bundle)
+    return [o.model_dump() for o in opts]
+
+
+schedule_optimizer_tool = FunctionTool(generate_recovery_options_tool)
+
+
+def create_schedule_optimizer_agent(model_name: Optional[str] = None) -> Agent:
+    """Instantiate the ADK Schedule Optimizer Agent."""
+    model = model_name or os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+    return Agent(
+        name="schedule_optimizer_agent",
+        model=model,
+        instruction=(
+            "You are the Schedule Optimizer Agent for the Continuity Council. "
+            "Execute the `generate_recovery_options_tool` to formulate viable candidate recovery options "
+            "(cover scene pull, company moves, holds) for production disruptions."
+        ),
+        tools=[schedule_optimizer_tool],
+    )
