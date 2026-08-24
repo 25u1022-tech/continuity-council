@@ -836,4 +836,135 @@ class TestProductionValidationAndDayBounds:
         assert res_report.status_code == 404
 
 
+# ---------------------------------------------------------------------------
+# 8. Gemini Client Quota, Cooldown & JSON Parsing Resilience
+# ---------------------------------------------------------------------------
+class TestGeminiClientQuotaAndResilience:
+    @pytest.fixture(autouse=True)
+    def reset_gemini_state(self, monkeypatch):
+        import services.gemini_client as gc
+        monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+        gc._quota_reset_at = None
+        yield
+        gc._quota_reset_at = None
+
+    def test_quota_error_sets_cooldown_and_resumes_after_expiry(self, monkeypatch):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        import services.gemini_client as gc
+
+        mock_client = MagicMock()
+        mock_models = MagicMock()
+        mock_content = AsyncMock(side_effect=Exception("429 Resource exhausted: quota exceeded"))
+        mock_models.generate_content = mock_content
+        mock_client.aio.models = mock_models
+        monkeypatch.setattr(gc, "_get_client", lambda: mock_client)
+
+        current_time = 1000.0
+        monkeypatch.setattr("time.time", lambda: current_time)
+
+        # First call triggers 429
+        res = asyncio.run(gc.generate_text("Hello"))
+        assert res is None
+        assert gc.quota_hit() is True
+        assert mock_content.call_count == 1
+
+        # Second call within cooldown is skipped without calling generate_content
+        res2 = asyncio.run(gc.generate_text("Hello again"))
+        assert res2 is None
+        assert mock_content.call_count == 1
+
+        # Advance time past default 60s cooldown (61s)
+        current_time = 1061.0
+        assert gc.quota_hit() is False
+
+        # Next call succeeds
+        resp_obj = MagicMock()
+        resp_obj.text = "Recovered answer"
+        mock_content.side_effect = None
+        mock_content.return_value = resp_obj
+
+        res3 = asyncio.run(gc.generate_text("Hello third time"))
+        assert res3 == "Recovered answer"
+        assert mock_content.call_count == 2
+        assert gc.quota_hit() is False
+
+    def test_retry_after_extraction_and_custom_cooldown(self, monkeypatch):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        import services.gemini_client as gc
+
+        mock_client = MagicMock()
+        mock_models = MagicMock()
+        mock_models.generate_content = AsyncMock(
+            side_effect=Exception("429 Quota limit reached; retry in 20.0s")
+        )
+        mock_client.aio.models = mock_models
+        monkeypatch.setattr(gc, "_get_client", lambda: mock_client)
+
+        current_time = 1000.0
+        monkeypatch.setattr("time.time", lambda: current_time)
+
+        asyncio.run(gc.generate_text("Test prompt"))
+        assert gc.quota_hit() is True
+
+        # At +10s, still in cooldown
+        current_time = 1010.0
+        assert gc.quota_hit() is True
+
+        # At +21s, cooldown has expired
+        current_time = 1021.0
+        assert gc.quota_hit() is False
+
+    def test_json_decode_error_does_not_set_quota_cooldown(self, monkeypatch):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        import services.gemini_client as gc
+
+        mock_client = MagicMock()
+        mock_models = MagicMock()
+        resp_invalid = MagicMock()
+        resp_invalid.text = "This is not valid json at all!"
+        mock_models.generate_content = AsyncMock(return_value=resp_invalid)
+        mock_client.aio.models = mock_models
+        monkeypatch.setattr(gc, "_get_client", lambda: mock_client)
+
+        current_time = 1000.0
+        monkeypatch.setattr("time.time", lambda: current_time)
+
+        # Call generate_json with invalid response
+        res = asyncio.run(gc.generate_json("Generate some json"))
+        assert res is None
+
+        # Verify quota_hit is NOT set by JSON parsing failure
+        assert gc.quota_hit() is False
+        assert gc._quota_reset_at is None
+
+        # Subsequent call with valid JSON works immediately
+        resp_valid = MagicMock()
+        resp_valid.text = '{"status": "success", "count": 42}'
+        mock_models.generate_content = AsyncMock(return_value=resp_valid)
+
+        res2 = asyncio.run(gc.generate_json("Generate json again"))
+        assert res2 == {"status": "success", "count": 42}
+        assert gc.quota_hit() is False
+
+    def test_non_quota_error_does_not_set_quota_cooldown(self, monkeypatch):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        import services.gemini_client as gc
+
+        mock_client = MagicMock()
+        mock_models = MagicMock()
+        mock_models.generate_content = AsyncMock(side_effect=TimeoutError("Request timed out"))
+        mock_client.aio.models = mock_models
+        monkeypatch.setattr(gc, "_get_client", lambda: mock_client)
+
+        res = asyncio.run(gc.generate_text("Test prompt"))
+        assert res is None
+        assert gc.quota_hit() is False
+        assert gc._quota_reset_at is None
+
+
+
 
