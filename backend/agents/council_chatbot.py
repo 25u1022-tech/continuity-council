@@ -1,8 +1,9 @@
-"""Council Chatbot Agent — producer-facing reasoning interface.
+"""Council Chatbot Agent — producer-facing kind, step-by-step assistant.
 
 Answers natural-language questions about council decisions, option rankings,
-and historical ClickHouse evidence using Gemini FunctionTools and the persistent
-mcp-clickhouse singleton client.
+and historical ClickHouse evidence, while guiding the user through every
+step of the product workflow (reporting disruptions, impact preview,
+recovery options, live signals, approvals, ledger, and settings).
 """
 from __future__ import annotations
 
@@ -20,16 +21,24 @@ from services.mcp_client import mcp_run_query
 logger = logging.getLogger("continuity.agents.chatbot")
 
 SYSTEM_PROMPT = (
-    "You are the Continuity Council's reasoning interface. "
-    "Answer questions about why options were ranked, what evidence was used, "
-    "and what constraints applied. Cite specific ClickHouse data. "
-    "If asked about off-topic subjects, politely decline and redirect to production planning."
+    "You are the Continuity Council's kind, patient, and knowledgeable producer guide. "
+    "Your purpose is to warmly assist film producers through every step of the Continuity Council platform: "
+    "switching productions, reporting disruptions, understanding the real-time impact preview, "
+    "explaining recovery option rankings and bottom-up cost models, interpreting live weather and FX signals, "
+    "approving decisions, exploring the immutable ClickHouse decision ledger, exporting reports, and configuring settings. "
+    "\n\nRules to follow:\n"
+    "1. Always maintain a warm, polite, encouraging, and supportive persona.\n"
+    "2. When explaining council decisions, cite concrete ClickHouse historical data, cost figures, delay hours, and compliance gates.\n"
+    "3. When answering workflow questions, provide clear, numbered step-by-step guidance.\n"
+    "4. End every response with a helpful next-step suggestion (e.g., 'Shall I walk you through reporting a disruption?' or 'Would you like to review the historical evidence for Option 1?').\n"
+    "5. If asked about unrelated off-topic topics (trivia, programming, general chat), politely and kindly guide the conversation back to assisting with film production recovery."
 )
 
 OFF_TOPIC_REJECTION = (
-    "I am the Continuity Council's reasoning interface dedicated to film production disruptions, "
-    "schedule recovery, and council decision evidence. I cannot assist with off-topic subjects. "
-    "Please ask questions related to production schedules, cast and location constraints, or historical evidence."
+    "I'm here as your dedicated Continuity Council guide to help you manage film production disruptions, "
+    "evaluate schedule recovery options, and explore historical evidence. "
+    "I'd love to help you with your production schedule, cast and location constraints, or ClickHouse data! "
+    "\n\nShall I walk you through reporting a disruption or exploring recovery options for your current project?"
 )
 
 # Common off-topic patterns to guard against
@@ -41,58 +50,99 @@ OFF_TOPIC_PATTERNS = [
     r"\b(weather in (paris|tokyo|rome|berlin|sydney|madrid|beijing|cairo|london|new york))\b",
 ]
 
-TOOL_DECLARATIONS = [
-    {
-        "name": "search_disruption_history",
-        "description": "Searches ClickHouse disruption_history for the top 5 similar disruptions and their outcomes.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "query": {
-                    "type": "STRING",
-                    "description": "Search term or disruption type like 'weather_delay', 'lead_actor_unavailable', etc.",
-                },
-                "production_id": {
-                    "type": "STRING",
-                    "description": "ID of the production (default 'prod_001')",
-                },
-            },
-            "required": ["query"],
-        },
+HELP_KB: Dict[str, Dict[str, Any]] = {
+    "report_disruption": {
+        "title": "How to Report a Production Disruption",
+        "answer": (
+            "Here is how to report a disruption and dispatch the Council step-by-step:\n\n"
+            "1. **Open the Form:** Click the **Report disruption** button in the top navigation or sidebar.\n"
+            "2. **Select Disruption Type:** Choose what happened (e.g. *Lead Actor Unavailable*, *Weather Delay*, *Location Unavailable*, *Equipment Failure*, or *Permit Issue*).\n"
+            "3. **Choose Shoot Day & Severity:** Select the affected shoot day (Day 1 to the end of shoot) and severity (*Low*, *Medium*, *High*, or *Critical*).\n"
+            "4. **Specify Details:** Name the specific cast member, crew department, or filming location involved.\n"
+            "5. **Review Impact Preview:** Before dispatching, inspect the live Impact Preview card to see affected scenes, estimated delay, and preliminary budget risk.\n"
+            "6. **Dispatch Investigation:** Click **Dispatch Investigation Council** to run all 6 specialist agents in parallel.\n\n"
+            "Shall I explain what happens during the Agent Investigation, or would you like help with recovery options?"
+        ),
     },
-    {
-        "name": "get_case_details",
-        "description": "Retrieves the state, disruption parameters, options, and chosen strategy of a specific investigation case.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "case_id": {
-                    "type": "STRING",
-                    "description": "Unique identifier of the disruption case",
-                }
-            },
-            "required": ["case_id"],
-        },
+    "recovery_options": {
+        "title": "Understanding Recovery Options",
+        "answer": (
+            "Here is how to navigate and evaluate the Council's recovery options:\n\n"
+            "1. **Navigate to Recovery Options:** Go to the **Recovery options** screen from the sidebar or investigation page.\n"
+            "2. **Option Cards:** Review 2 to 4 ranked recovery strategies (such as *Shoot Cover Scenes*, *Swap Locations*, *Move to Later Day*, or *Split Unit*).\n"
+            "3. **Evaluate Trade-offs:** Compare the composite score (0–100), estimated cost overrun (USD), schedule delay (hours), and continuity risk.\n"
+            "4. **Compliance Badges:** Look for green checkmarks verifying SAG-AFTRA turnaround times, DGA maximum day limits, and permit availability.\n"
+            "5. **Historical Evidence:** Look at the side-by-side ClickHouse evidence panel showing outcomes from 200,000+ benchmark historical disruption cases.\n"
+            "6. **Approve Decision:** Once you have chosen the best path, click **Approve Option** to record the decision in the immutable ledger.\n\n"
+            "Would you like me to explain why the top option was chosen for your active case?"
+        ),
     },
-    {
-        "name": "explain_option_ranking",
-        "description": "Retrieves compliance gate verdicts, budget sentinel scores, continuity risk, and ranking rationale for a specific recovery option.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "case_id": {
-                    "type": "STRING",
-                    "description": "Unique identifier of the disruption case",
-                },
-                "option_rank": {
-                    "type": "INTEGER",
-                    "description": "Rank of the option (1 for top/recommended, 2 for second, etc.)",
-                },
-            },
-            "required": ["case_id", "option_rank"],
-        },
+    "top_option": {
+        "title": "Why the Top Option is Chosen",
+        "answer": (
+            "The Continuity Council ranks recovery options using a calibrated multi-agent scoring model:\n\n"
+            "1. **Budget Sentinel Cost (40% weight):** Combines a bottom-up rate-card calculation (70%) with ClickHouse historical calibration (30%), adjusted for local country factors and live FX.\n"
+            "2. **Schedule Delay (30% weight):** Minimizes total delay hours to keep principal photography on schedule.\n"
+            "3. **Continuity Risk (15% weight):** Evaluates costume, lighting, makeup, and emotional narrative arc preservation.\n"
+            "4. **Guild & Safety Compliance (15% weight):** Enforces mandatory SAG-AFTRA turnaround rules, union day limits, and location permit windows.\n\n"
+            "Option 1 achieves the highest composite score while clearing all mandatory compliance gates.\n\n"
+            "Shall I show you the ClickHouse evidence or specific cost breakdown for Option 1?"
+        ),
     },
-]
+    "live_signals": {
+        "title": "What Live Signals Mean",
+        "answer": (
+            "Live signals bring real-time external conditions into the Council's cost and schedule calculations:\n\n"
+            "1. **Live Weather (Open-Meteo):** Real-time hourly precipitation, temperature, and wind speed for the shoot coordinates to verify whether exterior scenes can proceed or indoor cover sets are required.\n"
+            "2. **Live Foreign Exchange (Frankfurter):** Up-to-the-minute currency conversion rates for multi-currency crew and location rate cards.\n"
+            "3. **Airport & Transit Delays:** Live travel signal indicators for flying in replacement cast or specialized equipment.\n"
+            "4. **Historical Disruption Calibration (ClickHouse):** Querying 200,000+ historical disruption records via the MCP client to calibrate raw estimates with real-world studio outcomes.\n\n"
+            "Would you like me to show you the live signals active for your current production location?"
+        ),
+    },
+    "decision_ledger": {
+        "title": "The Immutable Decision Ledger",
+        "answer": (
+            "The Decision Ledger provides a tamper-evident audit trail of all approved production recovery actions:\n\n"
+            "1. **Immutable ClickHouse Table:** Every approval is appended to `continuity_council.decision_ledger` with timestamp, case ID, and producer details.\n"
+            "2. **Cryptographic SHA-256 Hash:** Each decision includes a cryptographic audit hash binding the disruption parameters, approved strategy, cost, and rationale.\n"
+            "3. **Schedule Changes Log:** All moved scenes and adjusted shoot days are logged to `schedule_changes` for complete post-production transparency.\n"
+            "4. **Export Capabilities:** You can download or export this audit log as formatted JSON or a structured report for studio executives, bond companies, and insurance adjusters.\n\n"
+            "Shall I guide you through exporting the audit report or reviewing past decisions?"
+        ),
+    },
+    "switch_production": {
+        "title": "Switching Productions",
+        "answer": (
+            "To switch or select a production:\n\n"
+            "1. Locate the **Select production** dropdown in the top-left corner of the sidebar.\n"
+            "2. Choose from the available productions (e.g. *The Long Dark Take*, *IRON HORIZON*, *THE LAST REEL*, *NIGHTFALL PROTOCOL*, *SALT & SMOKE*, or *CRIMSON STATIC*).\n"
+            "3. All dashboard metrics, calendar days, scenes, active disruptions, and audit ledgers will instantly load for the selected title.\n\n"
+            "Would you like me to walk you through the schedule of your selected production?"
+        ),
+    },
+    "settings_themes": {
+        "title": "Settings and Appearance",
+        "answer": (
+            "In the **Settings** screen, you can:\n\n"
+            "1. **Check System Connections:** View real-time connectivity status for ClickHouse Cloud and the MCP server.\n"
+            "2. **AI Engine Configuration:** Check the active Gemini model configuration (`gemini-3.6-flash`).\n"
+            "3. **Theme Toggle:** Switch between sleek **Apple Dark** and clean **Apple Light** interface modes.\n"
+            "4. **Demo Reset:** Reset all event tables back to a clean pre-disruption baseline when preparing a fresh demo.\n\n"
+            "Is there anything specific in Settings or the Council workflow you'd like help with?"
+        ),
+    },
+    "export_report": {
+        "title": "Exporting Reports",
+        "answer": (
+            "To export reports and decision summaries:\n\n"
+            "1. Navigate to **Decision ledger** or **Data & methodology** from the sidebar.\n"
+            "2. Review the recorded decisions, cost overruns, and schedule adjustments.\n"
+            "3. Click **Export Audit Report** to generate a clean, executive-ready document or download structured JSON for studio archiving.\n\n"
+            "Would you like me to walk you through reviewing the ledger before you export?"
+        ),
+    },
+}
 
 
 def _is_off_topic(question: str) -> bool:
@@ -103,7 +153,11 @@ def _is_off_topic(question: str) -> bool:
     for pattern in OFF_TOPIC_PATTERNS:
         if re.search(pattern, q):
             # Check if it has production keywords that redeem it
-            prod_keywords = ["scene", "shoot", "cast", "location", "production", "continuity", "schedule", "disruption", "actor", "option", "case"]
+            prod_keywords = [
+                "scene", "shoot", "cast", "location", "production", "continuity",
+                "schedule", "disruption", "actor", "option", "case", "ledger",
+                "weather", "signal", "report", "cost", "delay", "council", "guide"
+            ]
             if not any(k in q for k in prod_keywords):
                 return True
     return False
@@ -168,7 +222,6 @@ async def search_disruption_history(query: str, production_id: str = "prod_001")
         }
     except Exception as exc:
         logger.warning("mcp_run_query for search_disruption_history failed: %s", exc)
-        # Fallback to direct client query if MCP fails
         try:
             records = await clickhouse_client.query(sql)
             return {
@@ -194,12 +247,6 @@ async def search_disruption_history(query: str, production_id: str = "prod_001")
 async def get_case_details(case_id: str) -> Dict[str, Any]:
     """Retrieve details, options, and status for a specific case."""
     case = case_store.get(case_id) if case_id else None
-    if not case and case_id:
-        # Check active cases
-        all_c = case_store.all_cases()
-        if all_c:
-            case = all_c[0]
-
     if not case:
         all_c = case_store.all_cases()
         if all_c:
@@ -310,7 +357,7 @@ async def explain_option_ranking(case_id: str, option_rank: int = 1) -> Dict[str
 
 
 class CouncilChatbot:
-    """Producer-facing reasoning agent that cites ClickHouse data and agent logic."""
+    """Producer-facing kind, patient reasoning agent that cites ClickHouse data and guides the user."""
 
     def __init__(self):
         self.system_prompt = SYSTEM_PROMPT
@@ -321,11 +368,11 @@ class CouncilChatbot:
         production_id: str = "prod_001",
         case_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Answer a natural language question about council decisions and data."""
+        """Answer a natural language question with warm guidance and ClickHouse evidence."""
         clean_q = (question or "").strip()
         if not clean_q:
             return {
-                "answer": "Please ask a question about your production schedule, disruption options, or ClickHouse historical evidence.",
+                "answer": "Hello! How can I assist you with your production recovery or schedule today? Feel free to ask me anything!",
                 "sources": [],
             }
 
@@ -337,15 +384,35 @@ class CouncilChatbot:
             }
 
         sources: List[Dict[str, str]] = []
+        q_lower = clean_q.lower()
 
-        # 2. Gather relevant evidence using tools
+        # 2. Check for matching workflow/help topics
+        matched_kb = None
+        if "how do i report" in q_lower or "how to report" in q_lower or "report a disruption" in q_lower:
+            matched_kb = HELP_KB["report_disruption"]
+        elif "walk me through" in q_lower or "recovery option" in q_lower or "what are the options" in q_lower:
+            matched_kb = HELP_KB["recovery_options"]
+        elif "live signal" in q_lower or "signals mean" in q_lower or "weather signal" in q_lower:
+            matched_kb = HELP_KB["live_signals"]
+        elif "decision ledger" in q_lower or "show me the ledger" in q_lower or "ledger work" in q_lower:
+            matched_kb = HELP_KB["decision_ledger"]
+            sources.append({
+                "type": "mcp_query",
+                "query": "SELECT case_id, disruption_type, strategy, cost_overrun_usd, delay_hours, audit_hash FROM continuity_council.decision_ledger ORDER BY created_at DESC LIMIT 10",
+                "result_summary": "Querying immutable decision_ledger event table for audit trail.",
+            })
+        elif "switch" in q_lower and "production" in q_lower:
+            matched_kb = HELP_KB["switch_production"]
+        elif "setting" in q_lower or "theme" in q_lower or "dark mode" in q_lower:
+            matched_kb = HELP_KB["settings_themes"]
+        elif "export" in q_lower and "report" in q_lower:
+            matched_kb = HELP_KB["export_report"]
+
+        # 3. Gather case / option / disruption evidence
         history_result = None
         case_result = None
         option_result = None
 
-        q_lower = clean_q.lower()
-
-        # Check if we need case details
         if "option" in q_lower or "rank" in q_lower or "chosen" in q_lower or "why" in q_lower or "recommend" in q_lower or "evidence" in q_lower or case_id:
             case_result = await get_case_details(case_id or "")
             if case_result.get("sql"):
@@ -355,7 +422,6 @@ class CouncilChatbot:
                     "result_summary": case_result["summary"],
                 })
 
-        # Check if we need option explanation
         if "option a" in q_lower or "top option" in q_lower or "rank 1" in q_lower or "chosen" in q_lower or "recommend" in q_lower or "why" in q_lower or "evidence" in q_lower:
             rank = 2 if "option b" in q_lower or "rank 2" in q_lower else 1
             option_result = await explain_option_ranking(case_id or (case_result.get("case_id") if case_result else ""), option_rank=rank)
@@ -366,7 +432,6 @@ class CouncilChatbot:
                     "result_summary": option_result["summary"],
                 })
 
-        # Check if we need historical disruption data
         if "history" in q_lower or "weather" in q_lower or "similar" in q_lower or "past" in q_lower or "location" in q_lower or not sources:
             history_result = await search_disruption_history(clean_q, production_id=production_id)
             if history_result.get("sql"):
@@ -376,11 +441,13 @@ class CouncilChatbot:
                     "result_summary": history_result["summary"],
                 })
 
-        # 3. Try LLM synthesis with Gemini
+        # 4. Try LLM synthesis with Gemini
         answer = None
         if gemini_client.is_configured() and not gemini_client.quota_hit():
             try:
                 context_blocks = []
+                if matched_kb:
+                    context_blocks.append(f"WORKFLOW KNOWLEDGE BASE:\n{matched_kb['answer']}")
                 if case_result and case_result.get("status") != "not_found":
                     context_blocks.append(f"CURRENT INVESTIGATION CASE:\n{json.dumps(case_result, indent=2)}")
                 if option_result and option_result.get("name"):
@@ -391,23 +458,23 @@ class CouncilChatbot:
                 prompt = (
                     f"{SYSTEM_PROMPT}\n\n"
                     f"USER QUESTION: {clean_q}\n\n"
-                    f"CLICKHOUSE DATA & AGENT CONTEXT:\n"
-                    f"{'---'.join(context_blocks) if context_blocks else 'No active case loaded. Use general film continuity council reasoning.'}\n\n"
+                    f"CONTEXT & CLICKHOUSE DATA:\n"
+                    f"{'---'.join(context_blocks) if context_blocks else 'General Continuity Council film production workflow.'}\n\n"
                     f"INSTRUCTIONS:\n"
-                    f"- Provide a direct, professional, producer-facing answer.\n"
-                    f"- Cite specific numbers, dollar amounts, delay hours, and compliance gates.\n"
-                    f"- Mention how ClickHouse historical data or rate-card benchmarks calibrated the decision.\n"
-                    f"- Keep the explanation concise (2-4 paragraphs).\n"
+                    f"- Provide a kind, warm, and structured answer.\n"
+                    f"- Cite specific numbers, dollar amounts, delay hours, and compliance gates when explaining decisions.\n"
+                    f"- When explaining how to use a feature, use clear numbered steps.\n"
+                    f"- Always end with a polite, encouraging next-step suggestion.\n"
                 )
 
                 answer = await gemini_client.generate_text(prompt, timeout=6.0, temperature=0.2)
             except Exception as exc:
                 logger.warning("Gemini chatbot generation failed: %s", exc)
 
-        # 4. Deterministic fallback if Gemini is offline, timed out, or quota exhausted
+        # 5. Deterministic fallback if Gemini is offline, timed out, or quota reached
         if not answer:
             answer = self._generate_deterministic_fallback(
-                clean_q, case_result, option_result, history_result
+                clean_q, matched_kb, case_result, option_result, history_result
             )
 
         return {
@@ -418,12 +485,17 @@ class CouncilChatbot:
     def _generate_deterministic_fallback(
         self,
         question: str,
+        matched_kb: Optional[Dict[str, Any]],
         case_info: Optional[Dict[str, Any]],
         option_info: Optional[Dict[str, Any]],
         history_info: Optional[Dict[str, Any]],
     ) -> str:
-        """Deterministic reasoning fallback that produces rich, citation-backed answers."""
+        """Deterministic reasoning fallback providing kind, step-by-step guidance."""
         q = question.lower()
+
+        # If matched a predefined knowledge base topic
+        if matched_kb and "answer" in matched_kb:
+            return matched_kb["answer"]
 
         # Why was top option chosen / evidence for Option A
         if option_info and option_info.get("name"):
@@ -433,7 +505,7 @@ class CouncilChatbot:
             delay = option_info.get("estimated_delay_hours", 0)
             score = option_info.get("composite_score", 0.0)
             comp_status = "passed all guild and turn-around compliance gates" if option_info.get("compliance_valid") else "has compliance warnings"
-            
+
             lines = [
                 f"**Option {name} (Rank {rank})** was selected by the Continuity Council with a composite score of **{score:.1f}/100**.",
                 "",
@@ -456,6 +528,7 @@ class CouncilChatbot:
                     f"the average success score is {ev.get('avg_success_score', 0.9):.0%} with an average delay of {ev.get('avg_delay_hours', 2):.1f} hours."
                 )
 
+            lines.append("\nShall I walk you through approving this option or reviewing the other generated recovery options?")
             return "\n".join(lines)
 
         # Historical weather / location / disruption questions
@@ -477,12 +550,13 @@ class CouncilChatbot:
             lines.append(
                 "\nThe Council's Budget Sentinel utilizes these historical records to calibrate cost estimates and penalize high-variance recovery options."
             )
+            lines.append("\nWould you like to know how these historical benchmarks impact your active recovery options?")
             return "\n".join(lines)
 
-        # Default fallback
+        # Default helpful guide fallback
         return (
-            "The Continuity Council evaluates recovery options across four strict dimensions: "
-            "Schedule impact, Budget Sentinel cost calibration (70% rate-card + 30% ClickHouse historical evidence), "
-            "SAG-AFTRA/DGA compliance rules, and Continuity memory preservation. "
-            "Please select a specific active case or ask about particular option strategies for detailed breakdown."
+            "I'm here to help you navigate every aspect of your film production recovery! "
+            "You can ask me how to report a disruption, how recovery options are evaluated and priced, "
+            "what live weather/FX signals mean, or how to explore the decision ledger. "
+            "\n\nShall I walk you through reporting a disruption for your current production?"
         )

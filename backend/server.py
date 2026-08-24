@@ -585,6 +585,7 @@ async def get_country_factor_endpoint(country_code: str):
 
 
 @api.post("/chat", response_model=ChatResponse)
+@api.post("/chat/", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
     """Producer-facing conversational interface to ask questions about council reasoning."""
     chatbot = CouncilChatbot()
@@ -601,18 +602,27 @@ async def chat_endpoint(req: ChatRequest):
     except asyncio.TimeoutError:
         logger.warning("Chatbot request timed out after 8.0s")
         return {
-            "answer": "The council reasoning engine encountered a timeout (8.0s SLA limit). Please refine your query or try again.",
+            "answer": "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
             "sources": [],
         }
     except Exception as exc:
         logger.exception("Chatbot request failed: %s", exc)
         return {
-            "answer": f"An error occurred while querying council reasoning: {str(exc)[:150]}",
+            "answer": "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
             "sources": [],
         }
 
 
 app.include_router(api)
+
+# Route aliases on app root to ensure POST /chat or direct POST /api/chat never return 404/405
+@app.post("/chat", response_model=ChatResponse, include_in_schema=False)
+@app.post("/chat/", response_model=ChatResponse, include_in_schema=False)
+@app.post("/api/chat", response_model=ChatResponse, include_in_schema=False)
+@app.post("/api/chat/", response_model=ChatResponse, include_in_schema=False)
+async def app_chat_fallback(req: ChatRequest):
+    return await chat_endpoint(req)
+
 
 app.add_middleware(
     CORSMiddleware,

@@ -25,12 +25,14 @@ describe("CouncilChatbot Component", () => {
     container = null;
   });
 
-  test("defines 3 standard pre-filled prompt chips and initial greeting", () => {
-    expect(PREFILLED_PROMPTS).toHaveLength(3);
+  test("defines 5 standard pre-filled prompt chips and kind initial greeting", () => {
+    expect(PREFILLED_PROMPTS).toHaveLength(5);
+    expect(PREFILLED_PROMPTS).toContain("How do I report a disruption?");
+    expect(PREFILLED_PROMPTS).toContain("Walk me through the recovery options.");
     expect(PREFILLED_PROMPTS).toContain("Why was the top option chosen?");
-    expect(PREFILLED_PROMPTS).toContain("Show me historical weather disruptions for this location.");
-    expect(PREFILLED_PROMPTS).toContain("What evidence supports Option A?");
-    expect(INITIAL_MESSAGE.text).toContain("Continuity Council's reasoning interface");
+    expect(PREFILLED_PROMPTS).toContain("What do the live signals mean?");
+    expect(PREFILLED_PROMPTS).toContain("Show me the decision ledger.");
+    expect(INITIAL_MESSAGE.text).toContain("Continuity Council assistant");
   });
 
   test("renders floating action button (FAB) in DOM", async () => {
@@ -43,7 +45,7 @@ describe("CouncilChatbot Component", () => {
     expect(fab.getAttribute("aria-label")).toBe("Open Council Chat");
   });
 
-  test("toggles drawer and displays pre-filled prompt chips when clicked", async () => {
+  test("toggles drawer and displays all 5 pre-filled prompt chips when clicked", async () => {
     await act(async () => {
       root.render(<CouncilChatbot productionId="prod_001" />);
     });
@@ -56,8 +58,9 @@ describe("CouncilChatbot Component", () => {
     const dialog = container.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(container.textContent).toContain("Council Reasoning");
+    expect(container.textContent).toContain("How do I report a disruption?");
+    expect(container.textContent).toContain("Walk me through the recovery options.");
     expect(container.textContent).toContain("Why was the top option chosen?");
-    expect(container.textContent).toContain("Show me historical weather disruptions for this location.");
   });
 
   test("clicking prompt chip triggers sendChatMessage and displays response", async () => {
@@ -88,7 +91,6 @@ describe("CouncilChatbot Component", () => {
 
     await act(async () => {
       chipBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      // Allow async API promise to resolve
       await Promise.resolve();
     });
 
@@ -101,5 +103,28 @@ describe("CouncilChatbot Component", () => {
     expect(container.textContent).toContain("Option Shoot Cover Scenes was chosen");
     expect(container.textContent).toContain("ClickHouse Evidence Sources:");
     expect(container.textContent).toContain("MCP Query");
+  });
+
+  test("displays kind human message on network failure instead of raw error", async () => {
+    api.sendChatMessage.mockRejectedValueOnce(new Error("NetworkError: Failed to fetch"));
+
+    await act(async () => {
+      root.render(<CouncilChatbot productionId="prod_001" />);
+    });
+
+    const fab = container.querySelector("#council-chatbot-fab");
+    await act(async () => {
+      fab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const chipBtn = buttons.find((b) => b.textContent.includes("How do I report a disruption?"));
+
+    await act(async () => {
+      chipBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("I'm having a little trouble reaching the council right now");
   });
 });

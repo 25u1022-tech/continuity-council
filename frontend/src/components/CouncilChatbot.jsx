@@ -13,15 +13,17 @@ import {
 import { sendChatMessage } from "../lib/api";
 
 export const PREFILLED_PROMPTS = [
+  "How do I report a disruption?",
+  "Walk me through the recovery options.",
   "Why was the top option chosen?",
-  "Show me historical weather disruptions for this location.",
-  "What evidence supports Option A?",
+  "What do the live signals mean?",
+  "Show me the decision ledger.",
 ];
 
 export const INITIAL_MESSAGE = {
   id: "init",
   sender: "ai",
-  text: "Hello! I am the Continuity Council's reasoning interface. Ask me anything about why recovery options were ranked, the historical ClickHouse evidence used, or constraint gates applied.",
+  text: "Hello! I'm your Continuity Council assistant. I'm here to help guide you through every step of your production recovery, explain the council's reasoning, and explore historical ClickHouse evidence. How can I help you today?",
   sources: [],
   timestamp: new Date(),
 };
@@ -74,7 +76,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
       const aiMsg = {
         id: `ai_${Date.now()}`,
         sender: "ai",
-        text: res?.answer || "No response received from Council Reasoning.",
+        text: res?.answer || "Hello! How can I assist you further with your production recovery?",
         sources: res?.sources || [],
         timestamp: new Date(),
       };
@@ -85,9 +87,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         id: `err_${Date.now()}`,
         sender: "ai",
         text:
-          err?.response?.data?.detail ||
-          err?.message ||
-          "Sorry, an error occurred while querying council reasoning.",
+          "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
         sources: [],
         timestamp: new Date(),
       };

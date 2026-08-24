@@ -1354,5 +1354,45 @@ class TestCouncilChatbot:
         assert isinstance(data["sources"], list)
         assert len(data["sources"]) > 0
 
+    def test_chat_endpoint_405_regression(self, case):
+        from fastapi.testclient import TestClient
+        from server import app
+
+        client = TestClient(app)
+        payload = {
+            "message": "Why was the top option chosen?",
+            "production_id": case.production_id,
+            "case_id": case.case_id,
+        }
+
+        # Verify all route variants return 200 and never 405
+        for path in ["/api/chat", "/api/chat/", "/chat", "/chat/"]:
+            resp = client.post(path, json=payload)
+            assert resp.status_code == 200, f"Expected 200 for {path}, got {resp.status_code}"
+            body = resp.json()
+            assert "answer" in body
+            assert isinstance(body["sources"], list)
+
+    def test_chatbot_fallback_kb_all_chips(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        starter_chips = [
+            "How do I report a disruption?",
+            "Walk me through the recovery options.",
+            "Why was the top option chosen?",
+            "What do the live signals mean?",
+            "Show me the decision ledger.",
+        ]
+
+        for chip in starter_chips:
+            res = asyncio.run(chatbot.ask(chip))
+            assert "answer" in res
+            assert len(res["answer"]) > 50
+            # Must end with a kind next-step suggestion
+            assert any(s in res["answer"].lower() for s in ["shall i", "would you like", "feel free", "help you"])
+
+
 
 
