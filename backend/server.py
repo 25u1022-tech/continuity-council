@@ -6,10 +6,12 @@ Stack: FastAPI + ClickHouse Cloud (clickhouse-connect + official mcp-clickhouse)
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 from pathlib import Path as FilePath
 
+import fastapi
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, File, HTTPException, Path, Query, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -43,6 +45,7 @@ from services import (  # noqa: E402
     nl_parser,
     scene_generator,
     schedule_extractor,
+    tts_service,
 )
 from services.geo_service import geocode_location, resolve_geo_economics  # noqa: E402
 
@@ -718,6 +721,74 @@ async def chat_endpoint(req: ChatRequest):
             "answer": "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
             "sources": [],
         }
+
+
+# ── TTS (Text-to-Speech) endpoints ─────────────────────────────────────────────
+
+@api.post("/chat/tts/generate")
+async def tts_generate(req: dict = fastapi.Body(...)):
+    """Generate TTS audio from text. Returns hash + status immediately.
+
+    The audio is generated asynchronously and cached. Frontend polls
+    GET /chat/tts?message_hash=... to retrieve the audio.
+    """
+    text = (req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+
+    h = tts_service.text_hash(text)
+
+    # Check if already cached
+    cached = tts_service.get_cached(h)
+    if cached is not None:
+        return {
+            "hash": h,
+            "status": "ready",
+            "audio_url": f"/api/chat/tts?message_hash={h}",
+            "cached": True,
+        }
+
+    # Fire-and-forget: generate audio in background task
+    async def _bg_generate():
+        try:
+            await tts_service.text_to_speech(text)
+        except Exception as exc:
+            logger.warning("Background TTS generation failed: %s", exc)
+
+    asyncio.create_task(_bg_generate())
+
+    return {
+        "hash": h,
+        "status": "generating",
+        "audio_url": f"/api/chat/tts?message_hash={h}",
+        "cached": False,
+    }
+
+
+@api.get("/chat/tts")
+async def tts_get(message_hash: str = Query(...)):
+    """Retrieve cached TTS audio by message hash.
+
+    Returns:
+    - 200 with audio/wav or audio/mpeg stream on cache hit
+    - 204 No Content if audio is still generating
+    - 404 if hash not found or expired
+    """
+    cached = tts_service.get_cached(message_hash)
+    if cached is None:
+        # Check if it's in-flight (hash exists but not yet ready)
+        return Response(status_code=204)
+
+    audio_bytes = base64.b64decode(cached["audio_base64"])
+    mime = cached.get("mime_type", "audio/wav")
+    return Response(
+        content=audio_bytes,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'inline; filename="tts_{message_hash}.wav"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
 
 
 app.include_router(api)

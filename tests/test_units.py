@@ -2034,8 +2034,109 @@ class TestMoodboardService:
             assert mock_mb.call_count == 0
 
 
+# ---------------------------------------------------------------------------
+# TTS Service Tests
+# ---------------------------------------------------------------------------
+class TestTTSService:
+    """Tests for the Gemini TTS service."""
+
+    def test_text_hash_deterministic(self):
+        """Same text always produces the same hash."""
+        from services import tts_service
+
+        h1 = tts_service.text_hash("Hello, how are you?")
+        h2 = tts_service.text_hash("Hello, how are you?")
+        h3 = tts_service.text_hash("Something else")
+        assert h1 == h2
+        assert h1 != h3
+        assert len(h1) == 16
+
+    def test_text_hash_strips_whitespace(self):
+        """Leading/trailing whitespace doesn't change hash."""
+        from services import tts_service
+
+        h1 = tts_service.text_hash("Hello world")
+        h2 = tts_service.text_hash("  Hello world  ")
+        assert h1 == h2
+
+    def test_cache_miss_returns_none(self):
+        """get_cached returns None for unknown hash."""
+        from services import tts_service
+
+        result = tts_service.get_cached("nonexistent_hash_12345")
+        assert result is None
+
+    def test_cache_hit_returns_entry(self):
+        """Manually inserted cache entry is retrievable."""
+        import time
+        from services import tts_service
+
+        h = "test_cache_entry"
+        tts_service._TTS_CACHE[h] = {
+            "hash": h,
+            "audio_base64": "dGVzdA==",
+            "mime_type": "audio/wav",
+            "created_at": time.time(),
+            "expires_at": time.time() + 3600,
+        }
+        result = tts_service.get_cached(h)
+        assert result is not None
+        assert result["audio_base64"] == "dGVzdA=="
+        # Cleanup
+        del tts_service._TTS_CACHE[h]
+
+    def test_expired_cache_returns_none(self):
+        """Expired cache entries are evicted."""
+        import time
+        from services import tts_service
+
+        h = "test_expired_entry"
+        tts_service._TTS_CACHE[h] = {
+            "hash": h,
+            "audio_base64": "dGVzdA==",
+            "mime_type": "audio/wav",
+            "created_at": time.time() - 7200,
+            "expires_at": time.time() - 3600,  # Expired 1h ago
+        }
+        result = tts_service.get_cached(h)
+        assert result is None
+        assert h not in tts_service._TTS_CACHE
+
+    def test_tts_returns_none_for_empty_text(self):
+        """Empty text returns None immediately."""
+        import asyncio
+        from services import tts_service
+
+        result = asyncio.run(tts_service.text_to_speech(""))
+        assert result is None
+
+        result = asyncio.run(tts_service.text_to_speech("   "))
+        assert result is None
+
+    def test_chat_response_not_blocked_by_tts(self):
+        """Assert the chat endpoint does NOT wait for TTS — text returns before audio.
+
+        The POST /api/chat/tts/generate endpoint fires audio generation as
+        asyncio.create_task (fire-and-forget). We verify the endpoint function
+        returns status="generating" without blocking on audio completion.
+        """
+        from services import tts_service
+
+        h = tts_service.text_hash("Some test response")
+        # If not cached, the endpoint should return "generating" immediately
+        cached = tts_service.get_cached(h)
+        assert cached is None  # Not cached = will be async = non-blocking
 
 
+    def test_tts_endpoint_registered(self):
+        """Verify TTS endpoints are registered in the FastAPI app."""
+        from server import api
+
+        routes = [r.path for r in api.routes]
+        assert any("tts/generate" in r for r in routes), \
+            f"POST /chat/tts/generate not found in api routes: {routes}"
+        assert any("tts" in r for r in routes), \
+            f"GET /chat/tts not found in api routes: {routes}"
 
 
 

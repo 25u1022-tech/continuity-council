@@ -137,6 +137,18 @@ export const sendChatMessage = ({ message, production_id, case_id }) =>
     body: { message, production_id, case_id: case_id || undefined },
   });
 
+// --- TTS (Text-to-Speech) -------------------------------------------------
+export const generateTTS = (text) =>
+  request("/chat/tts/generate", { method: "POST", body: { text } });
+
+export const getTTSAudioUrl = (messageHash) =>
+  `${API}/chat/tts?message_hash=${encodeURIComponent(messageHash)}`;
+
+export const checkTTSReady = async (messageHash) => {
+  const res = await fetch(getTTSAudioUrl(messageHash), { method: "HEAD" });
+  return res.status === 200;
+};
+
 // --- Production onboarding ---------------------------------------------------
 export const listProductions = () => request("/productions");
 export const createProduction = (payload) =>

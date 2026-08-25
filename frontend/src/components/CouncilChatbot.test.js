@@ -127,4 +127,50 @@ describe("CouncilChatbot Component", () => {
 
     expect(container.textContent).toContain("I'm having a little trouble reaching the council right now");
   });
+
+  test("renders TTS toggle button and speak button on AI response", async () => {
+    api.sendChatMessage.mockResolvedValueOnce({
+      answer: "Here is your disruption analysis.",
+      sources: [],
+    });
+    api.generateTTS = jest.fn().mockResolvedValueOnce({
+      hash: "abc12345",
+      status: "ready",
+    });
+    api.getTTSAudioUrl = jest.fn().mockReturnValue("/api/chat/tts?message_hash=abc12345");
+
+    await act(async () => {
+      root.render(<CouncilChatbot productionId="prod_001" />);
+    });
+
+    const fab = container.querySelector("#council-chatbot-fab");
+    await act(async () => {
+      fab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // Verify TTS toggle in header exists
+    const ttsToggle = container.querySelector('[data-testid="tts-toggle-btn"]');
+    expect(ttsToggle).not.toBeNull();
+
+    // Trigger AI response
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const chipBtn = buttons.find((b) => b.textContent.includes("How do I report a disruption?"));
+    await act(async () => {
+      chipBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Check that speak button is present on the newly generated AI response
+    const speakBtn = container.querySelector('[data-testid^="tts-speak-btn-"]');
+    expect(speakBtn).not.toBeNull();
+
+    // Click the speak button
+    await act(async () => {
+      speakBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(api.generateTTS).toHaveBeenCalledWith("Here is your disruption analysis.");
+  });
 });
+

@@ -83,7 +83,8 @@ When a production disruption hits (lead actor out, location lost, weather delay,
 5. **Stage 2 (Parallel Specialists)** $\rightarrow$ `ParallelAgent` evaluates ClickHouse MCP empirical benchmarks, narrative continuity DAGs, union/transit compliance, and option copy.
 6. **Stage 3 (Synthesis)** $\rightarrow$ Bottom-up rate cards calibrated with live weather & FX signals, scored via TRD formula, with one-line natural-language explainability justifications citing ClickHouse evidence.
 7. **Producer Review & Imagen 3 Mood-Boards** $\rightarrow$ Producer reviews grounded options with plain-English justifications and can click on-demand **Imagen 3 visual mood-boards** for alternate locations before approving recovery plans.
-8. **Post-Approval Audit** $\rightarrow$ `Auditor` commits immutable audit ledger and schedule delta records to ClickHouse Cloud.
+8. **Chatbot Reasoning & Gemini TTS Voice** $\rightarrow$ Universal council assistant answers inquiries using ClickHouse evidence with optional **Gemini 3.1 Flash TTS** voice accessibility.
+9. **Post-Approval Audit** $\rightarrow$ `Auditor` commits immutable audit ledger and schedule delta records to ClickHouse Cloud.
 
 ---
 
@@ -131,6 +132,7 @@ Continuity Council is engineered natively on Google's **Agent Development Kit (A
 | **Agent Framework** | **Google ADK** | `google-adk` (v2.7.1) with `SequentialAgent`, `ParallelAgent`, `Runner`, and `FunctionTool` |
 | **AI / LLM** | **Google Gemini** | `gemini-3.6-flash` via official `google-genai` SDK with resilient backoff & JSON repair |
 | **Visual AI** | **Google Imagen 3** | `imagen-3.0-generate-002` on-demand 16:9 cinematic mood-boards with 24h dual cache |
+| **Voice AI / TTS** | **Google Gemini TTS** | `gemini-3.1-flash-tts` non-blocking speech synthesis with 1h in-memory hash cache |
 | **Backend API** | **FastAPI + Python 3.11** | High-performance async ASGI server with Pydantic v2 schemas and Uvicorn |
 | **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface with live polling |
 | **Live Signals** | **Open-Meteo & ECB/Frankfurter** | Real-time weather precipitation risk and live ISO currency exchange rates |

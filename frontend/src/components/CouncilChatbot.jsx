@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   MessageSquare,
   X,
@@ -9,8 +9,12 @@ import {
   ChevronDown,
   ChevronUp,
   Terminal,
+  Volume2,
+  VolumeX,
+  Loader2,
 } from "lucide-react";
-import { sendChatMessage } from "../lib/api";
+import { sendChatMessage, generateTTS, getTTSAudioUrl } from "../lib/api";
+import { safeStorage } from "../lib/storage";
 
 export const PREFILLED_PROMPTS = [
   "How do I report a disruption?",
@@ -35,8 +39,96 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
   const [loading, setLoading] = useState(false);
   const [expandedSource, setExpandedSource] = useState(null);
 
+  // TTS state
+  const [ttsEnabled, setTtsEnabled] = useState(
+    () => safeStorage.getItem("cc_tts_enabled", "true") === "true"
+  );
+  // Per-message TTS status: msgId -> "idle" | "loading" | "ready" | "error"
+  const [ttsStatus, setTtsStatus] = useState({});
+  // Per-message audio URLs: msgId -> audioUrl
+  const [ttsAudioUrls, setTtsAudioUrls] = useState({});
+  // Currently playing message ID
+  const [playingMsgId, setPlayingMsgId] = useState(null);
+  const audioRef = useRef(null);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  const toggleTts = useCallback(() => {
+    setTtsEnabled((prev) => {
+      const next = !prev;
+      safeStorage.setItem("cc_tts_enabled", String(next));
+      return next;
+    });
+  }, []);
+
+  const handleSpeak = useCallback(async (msgId, text) => {
+    // If already playing this message, stop
+    if (playingMsgId === msgId && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlayingMsgId(null);
+      return;
+    }
+
+    // If audio already cached, just play
+    if (ttsAudioUrls[msgId]) {
+      setPlayingMsgId(msgId);
+      if (audioRef.current) {
+        audioRef.current.src = ttsAudioUrls[msgId];
+        audioRef.current.play().catch(() => {});
+      }
+      return;
+    }
+
+    // Generate TTS
+    setTtsStatus((prev) => ({ ...prev, [msgId]: "loading" }));
+    try {
+      const res = await generateTTS(text);
+      const audioUrl = getTTSAudioUrl(res.hash);
+
+      if (res.status === "ready") {
+        setTtsAudioUrls((prev) => ({ ...prev, [msgId]: audioUrl }));
+        setTtsStatus((prev) => ({ ...prev, [msgId]: "ready" }));
+        setPlayingMsgId(msgId);
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          audioRef.current.play().catch(() => {});
+        }
+        return;
+      }
+
+      // Poll for ready state (max 10s, every 500ms)
+      let attempts = 0;
+      const maxAttempts = 20;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const check = await fetch(audioUrl, { method: "HEAD" });
+          if (check.status === 200) {
+            clearInterval(poll);
+            setTtsAudioUrls((prev) => ({ ...prev, [msgId]: audioUrl }));
+            setTtsStatus((prev) => ({ ...prev, [msgId]: "ready" }));
+            setPlayingMsgId(msgId);
+            if (audioRef.current) {
+              audioRef.current.src = audioUrl;
+              audioRef.current.play().catch(() => {});
+            }
+          } else if (attempts >= maxAttempts) {
+            clearInterval(poll);
+            setTtsStatus((prev) => ({ ...prev, [msgId]: "error" }));
+          }
+        } catch {
+          if (attempts >= maxAttempts) {
+            clearInterval(poll);
+            setTtsStatus((prev) => ({ ...prev, [msgId]: "error" }));
+          }
+        }
+      }, 500);
+    } catch {
+      setTtsStatus((prev) => ({ ...prev, [msgId]: "error" }));
+    }
+  }, [playingMsgId, ttsAudioUrls]);
 
   const scrollToBottom = () => {
     if (typeof messagesEndRef.current?.scrollIntoView === "function") {
@@ -203,6 +295,19 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
             <div className="flex items-center gap-1">
               <button
                 type="button"
+                onClick={toggleTts}
+                title={ttsEnabled ? "Disable text-to-speech" : "Enable text-to-speech"}
+                data-testid="tts-toggle-btn"
+                className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                  ttsEnabled
+                    ? "text-[var(--cc-text-primary)] bg-[var(--cc-surface-hover)]"
+                    : "text-[var(--cc-text-tertiary)] hover:bg-[var(--cc-surface-hover)] hover:text-[var(--cc-text-primary)]"
+                }`}
+              >
+                {ttsEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+              </button>
+              <button
+                type="button"
                 onClick={handleClearChat}
                 title="Clear Chat"
                 className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--cc-text-tertiary)] hover:bg-[var(--cc-surface-hover)] hover:text-[var(--cc-text-primary)] transition-colors"
@@ -300,11 +405,44 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                   )}
                 </div>
 
-                <span className="mt-1 px-1 text-[9.5px] text-[var(--cc-text-quaternary)]">
+                <span className="mt-1 px-1 text-[9.5px] text-[var(--cc-text-quaternary)] flex items-center gap-1.5">
                   {new Date(msg.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                  {/* TTS Speak Button (AI messages only) */}
+                  {msg.sender === "ai" && ttsEnabled && msg.id !== "init" && (
+                    <button
+                      type="button"
+                      data-testid={`tts-speak-btn-${msg.id}`}
+                      onClick={() => handleSpeak(msg.id, msg.text)}
+                      title={
+                        ttsStatus[msg.id] === "error"
+                          ? "Audio unavailable"
+                          : ttsStatus[msg.id] === "loading"
+                          ? "Generating audio…"
+                          : playingMsgId === msg.id
+                          ? "Stop playback"
+                          : "Listen to response"
+                      }
+                      className={`inline-flex items-center justify-center h-4.5 w-4.5 rounded transition-colors ${
+                        ttsStatus[msg.id] === "error"
+                          ? "text-[var(--cc-text-quaternary)] cursor-not-allowed"
+                          : playingMsgId === msg.id
+                          ? "text-[var(--cc-btn-primary-bg)]"
+                          : "text-[var(--cc-text-tertiary)] hover:text-[var(--cc-text-primary)]"
+                      }`}
+                      disabled={ttsStatus[msg.id] === "loading"}
+                    >
+                      {ttsStatus[msg.id] === "loading" ? (
+                        <Loader2 size={10} className="animate-spin" />
+                      ) : ttsStatus[msg.id] === "error" ? (
+                        <VolumeX size={10} />
+                      ) : (
+                        <Volume2 size={10} />
+                      )}
+                    </button>
+                  )}
                 </span>
               </div>
             ))}
@@ -374,6 +512,15 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
               </button>
             </form>
           </div>
+
+          {/* Hidden audio element for TTS playback */}
+          <audio
+            ref={audioRef}
+            data-testid="tts-audio-player"
+            onEnded={() => setPlayingMsgId(null)}
+            onError={() => setPlayingMsgId(null)}
+            style={{ display: "none" }}
+          />
         </div>
       )}
 

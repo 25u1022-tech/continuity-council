@@ -19,6 +19,7 @@ import {
   Cpu,
   ShieldCheck,
   Zap,
+  Volume2,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -43,6 +44,9 @@ export default function SettingsPage() {
   );
   const [tier3Mult, setTier3Mult] = useState(
     () => Number(safeStorage.getItem("cc_tier_3_mult", "0.35")) || 0.35
+  );
+  const [ttsEnabled, setTtsEnabled] = useState(
+    () => safeStorage.getItem("cc_tts_enabled", "true") === "true"
   );
 
   useEffect(() => {
@@ -160,6 +164,34 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* TTS Toggle */}
+          <div className="space-y-2">
+            <label className="text-[13px] font-medium text-[var(--cc-text-primary)]">Text-to-Speech</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                data-testid="settings-tts-toggle"
+                onClick={() => {
+                  const next = !ttsEnabled;
+                  setTtsEnabled(next);
+                  safeStorage.setItem("cc_tts_enabled", String(next));
+                  toast.success(next ? "Text-to-speech enabled" : "Text-to-speech disabled");
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-[10px] border p-2.5 text-[13px] font-medium cc-transition ${
+                  ttsEnabled
+                    ? "border-[var(--cc-text-primary)] bg-[var(--cc-surface-hover)] text-[var(--cc-text-primary)] shadow-sm font-semibold"
+                    : "border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)]"
+                }`}
+              >
+                <Volume2 size={14} />
+                {ttsEnabled ? "Enabled" : "Disabled"}
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--cc-text-tertiary)]">
+              Gemini TTS voice for chatbot responses (accessibility)
+            </p>
           </div>
         </div>
       </div>
