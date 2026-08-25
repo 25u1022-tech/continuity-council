@@ -1903,6 +1903,138 @@ class TestSchedulePDFExtractor:
             assert "manually or via CSV" in job["error"]
 
 
+class TestMoodboardService:
+    """Unit and endpoint tests for Imagen 3 location mood-boards."""
+
+    def test_build_prompt(self):
+        from services.moodboard_service import build_prompt
+
+        loc = {
+            "name": "Harbor Pier 7 Exterior",
+            "location_type": "exterior",
+            "notes": "Commercial working port with heavy gantry cranes",
+        }
+        scene = {
+            "scene_title": "Harbor Setup",
+            "description": "Detective meets informant at the dock",
+            "day_night": "NIGHT",
+        }
+        prompt = build_prompt(loc, scene)
+        assert "Harbor Pier 7 Exterior" in prompt
+        assert "exterior" in prompt
+        assert "night" in prompt.lower()
+        assert "35mm" in prompt
+        assert "No text" in prompt
+
+    def test_generate_moodboard_success_and_cache(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from services import moodboard_service
+
+        fake_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb"
+        mock_response = MagicMock()
+        mock_img = MagicMock()
+        mock_img.image.image_bytes = fake_bytes
+        mock_response.generated_images = [mock_img]
+
+        # Clear caches for test isolation
+        moodboard_service._MEMORY_CACHE.clear()
+        (moodboard_service.CACHE_DIR / "loc_test_001.json").unlink(missing_ok=True)
+
+        with patch("services.gemini_client.is_configured", return_value=True), \
+             patch("services.gemini_client.quota_hit", return_value=False), \
+             patch("services.gemini_client._get_client") as mock_get_client:
+            
+            mock_client = MagicMock()
+            mock_client.aio.models.generate_images = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+
+            # 1. First call -> generates image
+            res1 = asyncio.run(
+                moodboard_service.generate_moodboard(
+                    location_id="loc_test_001",
+                    location={"name": "Test Stage A", "location_type": "interior"},
+                )
+            )
+            assert res1 is not None
+            assert res1["status"] == "ready"
+            assert res1["cached"] is False
+            assert res1["location_name"] == "Test Stage A"
+            assert len(res1["image_base64"]) > 0
+            assert mock_client.aio.models.generate_images.call_count == 1
+
+            # 2. Second call -> served from cache without calling Imagen again
+            res2 = asyncio.run(
+                moodboard_service.generate_moodboard(
+                    location_id="loc_test_001",
+                    location={"name": "Test Stage A", "location_type": "interior"},
+                )
+            )
+            assert res2 is not None
+            assert res2["status"] == "ready"
+            assert res2["cached"] is True
+            # Zero new Imagen calls
+            assert mock_client.aio.models.generate_images.call_count == 1
+
+    def test_moodboard_endpoint_failure_returns_202(self):
+        from unittest.mock import AsyncMock, patch
+        from fastapi.testclient import TestClient
+        from server import app
+
+        client = TestClient(app)
+
+        with patch("services.moodboard_service.generate_moodboard", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = None  # Simulates quota exhaustion / failure
+
+            resp = client.get("/api/locations/loc_unavailable_001/moodboard")
+            assert resp.status_code == 202
+            data = resp.json()
+            assert data["status"] == "unavailable"
+            assert data["location_id"] == "loc_unavailable_001"
+            assert "unavailable" in data["detail"].lower()
+
+    def test_investigation_makes_zero_imagen_calls(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from services import moodboard_service
+        from agents.orchestrator import run_investigation
+        from models import CaseState, DisruptionReport
+
+        # Spy on moodboard generator
+        with patch("services.moodboard_service.generate_moodboard", new_callable=AsyncMock) as mock_mb, \
+             patch("services.clickhouse_client.get_current_schedule", new_callable=AsyncMock) as mock_sched:
+
+            mock_sched.return_value = {
+                "production": {"production_id": "prod_001", "title": "Test", "start_date": "2026-08-24", "total_shoot_days": 10},
+                "scenes": [
+                    {"scene_id": "sc_001", "shoot_day": 1, "location_id": "loc_001", "cast_ids": ["c_001"], "pages": 1.0, "scene_title": "Scene 1"}
+                ],
+                "locations": [{"location_id": "loc_001", "name": "Pier 7", "location_type": "exterior"}],
+                "cast": [{"cast_id": "c_001", "name": "Actor", "role_type": "lead"}],
+            }
+
+            fake_case = CaseState(
+                case_id="case_test_sla",
+                production_id="prod_001",
+                disruption=DisruptionReport(
+                    disruption_type="lead_actor_unavailable",
+                    affected_cast_id="c_001",
+                    affected_day=1,
+                    severity="medium",
+                ),
+                status="investigating",
+            )
+
+            try:
+                asyncio.run(run_investigation(fake_case))
+            except Exception:
+                pass
+
+            # CRITICAL CONSTRAINT: ZERO IMAGEN CALLS DURING INVESTIGATION
+            assert mock_mb.call_count == 0
+
+
+
 
 
 

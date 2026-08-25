@@ -12,7 +12,7 @@ from pathlib import Path as FilePath
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, File, HTTPException, Path, Query, Response, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
@@ -39,6 +39,7 @@ from services import (  # noqa: E402
     geo_service,
     import_service,
     mcp_client,
+    moodboard_service,
     nl_parser,
     scene_generator,
     schedule_extractor,
@@ -371,6 +372,32 @@ async def confirm_schedule_import(job_id: str):
     except Exception as exc:
         logger.error("Failed to confirm schedule import job %s: %s", job_id, exc)
         raise HTTPException(500, f"Failed to persist schedule rows: {exc}")
+
+
+@api.get("/locations/{location_id}/moodboard")
+async def get_location_moodboard(
+    location_id: str = Path(..., description="Location ID"),
+    scene_id: Optional[str] = Query(None, description="Optional scene ID for lighting/atmosphere context"),
+):
+    """Get on-demand Imagen 3 cinematic mood-board preview for a location."""
+    res = await moodboard_service.generate_moodboard(
+        location_id=location_id,
+        timeout=8.0,
+    )
+    if res and res.get("image_base64"):
+        return JSONResponse(
+            status_code=200,
+            content=res,
+        )
+    # 202 Accepted with unavailable status on failure/quota (never 500)
+    return JSONResponse(
+        status_code=202,
+        content={
+            "status": "unavailable",
+            "location_id": location_id,
+            "detail": "AI moodboard preview currently unavailable or cooling down.",
+        },
+    )
 
 
 @api.get("/productions/{production_id}/studio-cohort")

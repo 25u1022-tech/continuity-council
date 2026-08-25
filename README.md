@@ -82,7 +82,7 @@ When a production disruption hits (lead actor out, location lost, weather delay,
 4. **Stage 1 (Generation)** $\rightarrow$ Deterministic formulation of viable recovery moves.
 5. **Stage 2 (Parallel Specialists)** $\rightarrow$ `ParallelAgent` evaluates ClickHouse MCP empirical benchmarks, narrative continuity DAGs, union/transit compliance, and option copy.
 6. **Stage 3 (Synthesis)** $\rightarrow$ Bottom-up rate cards calibrated with live weather & FX signals, scored via TRD formula, with one-line natural-language explainability justifications citing ClickHouse evidence.
-7. **Producer Review** $\rightarrow$ Producer reviews grounded options with plain-English justifications and selects the optimal recovery plan.
+7. **Producer Review & Imagen 3 Mood-Boards** $\rightarrow$ Producer reviews grounded options with plain-English justifications and can click on-demand **Imagen 3 visual mood-boards** for alternate locations before approving recovery plans.
 8. **Post-Approval Audit** $\rightarrow$ `Auditor` commits immutable audit ledger and schedule delta records to ClickHouse Cloud.
 
 ---
@@ -130,6 +130,7 @@ Continuity Council is engineered natively on Google's **Agent Development Kit (A
 | **Database** | **ClickHouse Cloud** | `clickhouse-connect` (v1.7.1) + official **`mcp-clickhouse`** (v0.4.1) FastMCP stdio server |
 | **Agent Framework** | **Google ADK** | `google-adk` (v2.7.1) with `SequentialAgent`, `ParallelAgent`, `Runner`, and `FunctionTool` |
 | **AI / LLM** | **Google Gemini** | `gemini-3.6-flash` via official `google-genai` SDK with resilient backoff & JSON repair |
+| **Visual AI** | **Google Imagen 3** | `imagen-3.0-generate-002` on-demand 16:9 cinematic mood-boards with 24h dual cache |
 | **Backend API** | **FastAPI + Python 3.11** | High-performance async ASGI server with Pydantic v2 schemas and Uvicorn |
 | **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface with live polling |
 | **Live Signals** | **Open-Meteo & ECB/Frankfurter** | Real-time weather precipitation risk and live ISO currency exchange rates |

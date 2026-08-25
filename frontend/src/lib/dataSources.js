@@ -81,6 +81,21 @@ export const DATA_SOURCES = [
     timeout: "6.0 seconds hard timeout",
     fallback: "Pre-aggregated fallback priors with deterministic taxonomy rankings.",
   },
+  {
+    id: "imagen-3",
+    name: "Google Imagen 3 (Multimodal Visual Previews)",
+    tagline: "On-demand photorealistic film-still moodboards for alternate locations",
+    icon: "Sparkles",
+    provider: "Google Cloud / Gemini API",
+    attribution: "Imagen 3 (imagen-3.0-generate-002) via Google GenAI SDK",
+    attributionUrl: "https://cloud.google.com/vertex-ai/docs/generative-ai/image/overview",
+    endpoint: "Google GenAI SDK generate_images",
+    whatWeFetch: "16:9 cinematic establishing stills generated from location type, atmospheric notes, and lighting metadata.",
+    howUsed: "Allows producers to inspect photorealistic visual moodboards of alternate filming locations before approving recovery schedule moves. On-demand only (user click), zero overhead on investigation SLA.",
+    cacheTtl: "24 hours dual-tier (in-memory + disk cache)",
+    timeout: "8.0 seconds hard timeout",
+    fallback: "Graceful 202 placeholder card with uninterrupted option selection.",
+  },
 ];
 
 export const SIGNAL_IMPACTS = [
@@ -108,6 +123,11 @@ export const SIGNAL_IMPACTS = [
     signal: "Historical Cohort Aggregation (ClickHouse MV)",
     affectedAgent: "Budget Sentinel & Auditor",
     impactDescription: "Calibrates bottom-up itemized cost model with 30% empirical historical weighting and logs audit proof.",
+  },
+  {
+    signal: "Alternate Location Mood-Boards (Google Imagen 3)",
+    affectedAgent: "Producer Review & Schedule Optimizer",
+    impactDescription: "Provides on-demand cinematic 16:9 visual previews for alternate locations on user click (cached for 24h, zero investigation overhead).",
   },
 ];
 
