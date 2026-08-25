@@ -29,7 +29,7 @@ import case_store
 from agents import budget_sentinel, compliance, continuity_memory, schedule_optimizer
 from models import CaseState, RecoveryOption
 from scoring import score_options
-from services import clickhouse_client, gemini_client
+from services import clickhouse_client, gemini_client, justification_service
 
 logger = logging.getLogger("continuity.agents.orchestrator")
 
@@ -154,6 +154,12 @@ async def calibrate_and_synthesize_tool(
             case.recommendation_rationale = deterministic_rationale
     else:
         case.recommendation_rationale = deterministic_rationale
+
+    if case.options:
+        try:
+            await justification_service.generate_justifications(case.options, case.evidence_rows)
+        except Exception as exc:
+            logger.warning("Justification service call in calibrate_and_synthesize_tool failed: %s", exc)
 
     return {
         "ranked_options": [o.model_dump() for o in case.options],
@@ -441,6 +447,12 @@ async def _run(case: CaseState) -> None:
         "INVESTIGATION TIMING [%s]: total=%.2fs | schedule_fetch=%.2fs | mcp_sum=%.2fs | ranked_options=%d",
         case.case_id, t_total, t_fetch, mcp_total, len(case.options),
     )
+
+    if case.options and any(not getattr(o, "justification", "") for o in case.options):
+        try:
+            await justification_service.generate_justifications(case.options, case.evidence_rows)
+        except Exception as exc:
+            logger.warning("Justification generation before options_ready failed: %s", exc)
 
     case.status = "options_ready"
     case.llm_mode = "deterministic" if gemini_client.quota_hit() or not gemini_client.is_configured() else "gemini"

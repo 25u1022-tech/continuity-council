@@ -239,6 +239,20 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove }) => 
         </div>
       </div>
 
+      {/* Explainability Layer: Justification Insight */}
+      {option.justification && (
+        <div
+          data-testid={`option-justification-${option.option_id}`}
+          className={`mt-3.5 rounded-[9px] px-3.5 py-2 text-[12.5px] leading-relaxed transition-colors ${
+            option.justification.startsWith("Ranked #")
+              ? "border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)]/50 text-[var(--cc-text-secondary)] font-normal"
+              : "border-l-2 border-l-[var(--cc-text-primary)]/70 border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] text-[var(--cc-text-secondary)] italic shadow-sm"
+          }`}
+        >
+          <span className="text-[var(--cc-text-secondary)]">{option.justification}</span>
+        </div>
+      )}
+
       <p className="mt-3 text-[13px] leading-relaxed text-[var(--cc-text-secondary)]">{option.description}</p>
 
       {/* Metrics Strip */}

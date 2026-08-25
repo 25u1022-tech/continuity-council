@@ -230,6 +230,7 @@ class RecoveryOption(BaseModel):
     score: float = 0.0
     rank: int = 0
     recommended: bool = False
+    justification: str = ""
 
 
 class StageEvent(BaseModel):

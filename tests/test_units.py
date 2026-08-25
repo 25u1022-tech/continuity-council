@@ -1437,6 +1437,118 @@ class TestCouncilChatbot:
             assert data["sources"] == []
 
 
+# ---------------------------------------------------------------------------
+# Explainability Layer: Justification Engine Tests
+# ---------------------------------------------------------------------------
+class TestExplainabilityJustification:
+    def test_recovery_option_schema_has_justification(self):
+        opt = RecoveryOption(
+            option_id="opt_test",
+            name="Test Option",
+            strategy="swap_locations",
+            estimated_cost_usd=18800,
+            estimated_delay_hours=3.7,
+            rank=1,
+            justification="Natural language justification test",
+        )
+        assert opt.justification == "Natural language justification test"
+        dumped = opt.model_dump()
+        assert "justification" in dumped
+        assert dumped["justification"] == "Natural language justification test"
+
+    def test_deterministic_fallback_template_format(self):
+        from services.justification_service import format_deterministic_fallback
+        from models import EvidenceRow
+
+        opt = RecoveryOption(
+            option_id="opt_1",
+            name="Shoot cover scenes",
+            strategy="shoot_cover_scenes",
+            estimated_cost_usd=18800,
+            estimated_delay_hours=3.7,
+            rank=1,
+            evidence=EvidenceRow(
+                resolution_strategy="shoot_cover_scenes",
+                past_cases=22467,
+                avg_cost_overrun_usd=17241.0,
+                avg_delay_hours=3.7,
+            ),
+        )
+        fallback = format_deterministic_fallback(opt)
+        assert fallback == "Ranked #1: $18,800 avg cost and 3.7h delay based on 22,467 similar historical cases."
+
+    def test_justification_service_with_gemini_success(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from services.justification_service import generate_justifications
+
+        opt = RecoveryOption(
+            option_id="opt_1",
+            name="Swap shoot days",
+            strategy="swap_locations",
+            estimated_cost_usd=25800,
+            estimated_delay_hours=5.2,
+            rank=1,
+            recommended=True,
+        )
+
+        with (
+            patch("services.gemini_client.is_configured", return_value=True),
+            patch("services.gemini_client.quota_hit", return_value=False),
+            patch("services.gemini_client.generate_text", new_callable=AsyncMock) as mock_gen,
+        ):
+            mock_gen.return_value = "Swap shoot days minimizes financial exposure to $25,800 and 5.2h delay across 12,221 empirical cases."
+            results = asyncio.run(generate_justifications([opt]))
+
+            assert opt.option_id in results
+            assert "minimizes financial exposure" in opt.justification
+            assert opt.justification == results[opt.option_id]
+
+    def test_justification_service_gemini_timeout_fallback(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from services.justification_service import generate_justifications
+
+        opt = RecoveryOption(
+            option_id="opt_2",
+            name="Use stand-in",
+            strategy="use_stand_in",
+            estimated_cost_usd=17500,
+            estimated_delay_hours=3.2,
+            rank=2,
+        )
+
+        with patch("services.gemini_client.generate_text", side_effect=asyncio.TimeoutError("Timeout")):
+            results = asyncio.run(generate_justifications([opt]))
+
+            assert opt.option_id in results
+            assert opt.justification.startswith("Ranked #2:")
+            assert "$17,500 avg cost" in opt.justification
+            assert "3.2h delay" in opt.justification
+
+    def test_justification_service_gemini_exception_fallback(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from services.justification_service import generate_justifications
+
+        opt = RecoveryOption(
+            option_id="opt_3",
+            name="Wait for actor",
+            strategy="wait_for_actor",
+            estimated_cost_usd=62000,
+            estimated_delay_hours=11.8,
+            rank=3,
+        )
+
+        with patch("services.gemini_client.generate_text", side_effect=Exception("API Error")):
+            results = asyncio.run(generate_justifications([opt]))
+
+            assert opt.option_id in results
+            assert opt.justification.startswith("Ranked #3:")
+            assert "$62,000" in opt.justification
+            assert "11.8h delay" in opt.justification
+
+
 
 
 
