@@ -80,6 +80,33 @@ export const parseNLDisruption = (description, productionId = PRODUCTION_ID) =>
     method: "POST",
     body: { description, production_id: productionId },
   });
+
+export const uploadSchedulePDF = async (productionId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API}/productions/${productionId}/import-schedule`, {
+    method: "POST",
+    body: formData,
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const err = new Error((data && data.detail) || `HTTP ${res.status}`);
+    err.response = { status: res.status, data };
+    throw err;
+  }
+  return data;
+};
+
+export const getScheduleImportJob = (jobId) => request(`/imports/${jobId}`);
+
+export const confirmScheduleImport = (jobId) =>
+  request(`/imports/${jobId}/confirm`, { method: "POST" });
+
 export const getCase = (caseId) => request(`/cases/${caseId}`);
 export const approveOption = (caseId, optionId, approvedBy = "producer") =>
   request(`/cases/${caseId}/approve`, {

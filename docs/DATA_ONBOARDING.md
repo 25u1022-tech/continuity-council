@@ -120,8 +120,59 @@ Inspect the studio dataset size and current blending weight.
 
 ---
 
-## 6. Enterprise Roadmap
+## 6. Shooting Schedule & Call Sheet PDF Ingestion (Gemini Document Understanding)
+
+Producers can upload production shooting schedules, one-liners, and daily call sheets in PDF format. Gemini natively extracts the production structure into ClickHouse.
+
+### Pipeline Architecture
+1. **Upload & Bounds Validation**:
+   - Accepts multipart PDF (`application/pdf`, up to 10MB, max 20 pages).
+   - Validates `%PDF-` binary magic header.
+   - Creates an asynchronous import job returning `{job_id, status: "pending"}`.
+2. **Gemini Multimodal Document Extraction**:
+   - Feeds the raw PDF bytes directly to Gemini (`gemini-3.6-flash`) with structured JSON schema.
+   - Extracts shoot days, dates, scenes, cast members, and locations with a 30s timeout.
+3. **Normalization & Deduplication**:
+   - Case-insensitive cast and location name deduplication.
+   - Standardizes `int_ext` (`INT`, `EXT`, `INT/EXT`) and `day_night` (`DAY`, `NIGHT`).
+   - Automatically orders scenes by shoot day and sequence order.
+4. **Interactive Preview**:
+   - The UI polls `GET /api/imports/{job_id}` to display summary counts (days, scenes, cast, locations) and sample extracted breakdown tables.
+5. **Confirmation & ClickHouse Upsert**:
+   - `POST /api/imports/{job_id}/confirm` persists new locations to `continuity_council.locations`, cast members to `continuity_council.cast_members`, updates `continuity_council.productions.total_shoot_days`, and replaces `continuity_council.production_schedule`.
+
+### Expected Extraction Payload Schema
+```json
+{
+  "shoot_days": [
+    {
+      "day_number": 1,
+      "date": "2026-08-24",
+      "scenes": ["1", "2A"]
+    }
+  ],
+  "scenes": [
+    {
+      "scene_number": "1",
+      "scene_title": "Harbor Setup & Briefing",
+      "description": "Detective meets informant at the dock",
+      "location_name": "Harbor Pier 7 Exterior",
+      "cast_names": ["Mara Voss", "Dev Okafor"],
+      "int_ext": "EXT",
+      "day_night": "DAY",
+      "pages": 1.2,
+      "shoot_day": 1
+    }
+  ],
+  "locations": ["Harbor Pier 7 Exterior", "Stage A - Interrogation Set"],
+  "cast": ["Mara Voss", "Dev Okafor", "Lena Petrov"]
+}
+```
+
+---
+
+## 7. Enterprise Roadmap
 - [x] Phase 1: CSV Multipart Ingest + Validation Engine + ECB FX Normalization + $N/200$ Blending.
-- [ ] Phase 2: Automated SFTP / S3 Bucket Hot Folders for nightly studio wraps.
+- [x] Phase 2: Native PDF Shooting Schedule & Call Sheet Ingestion via Gemini document understanding.
 - [ ] Phase 3: Movie Magic Budgeting (MMB) & Entertainment Partners (EP) native file importers.
 - [ ] Phase 4: Studio-specific rate card override sync via ClickHouse dictionary.

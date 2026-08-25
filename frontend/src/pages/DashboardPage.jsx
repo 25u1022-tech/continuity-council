@@ -8,8 +8,9 @@ import { getProduction, getHealth, timeAgo, sentenceCase } from "../lib/api";
 import { useProduction } from "../context/ProductionContext";
 import { dayLabel } from "../lib/days";
 import {
-  CalendarDays, Film, Database, Siren, MapPin, Users, ArrowRight, CircleCheck, CircleX,
+  CalendarDays, Film, Database, Siren, MapPin, Users, ArrowRight, CircleCheck, CircleX, Upload, Sparkles,
 } from "lucide-react";
+import { ScheduleImportModal } from "../components/ScheduleImportModal";
 
 const Stat = ({ icon: Icon, label, value, animate = true, testId, accent }) => {
   const n = useCountUp(typeof value === "number" ? value : 0, { enabled: animate });
@@ -34,6 +35,7 @@ export default function DashboardPage({ activeCaseId }) {
   const [health, setHealth] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedId) return undefined;
@@ -112,16 +114,37 @@ export default function DashboardPage({ activeCaseId }) {
   return (
     <div className="cc-fade-up space-y-8" data-testid="production-dashboard-page">
       {/* Page Header */}
-      <div>
-        <div className="text-[12px] font-semibold uppercase tracking-wider text-[var(--cc-text-tertiary)]">
-          Now shooting
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="text-[12px] font-semibold uppercase tracking-wider text-[var(--cc-text-tertiary)]">
+            Now shooting
+          </div>
+          <h1 className="font-display mt-1 text-[30px] font-semibold leading-tight tracking-tight text-[var(--cc-text-primary)]">
+            {production.title}
+          </h1>
+          <p className="mt-1.5 text-[14px] text-[var(--cc-text-secondary)]">
+            {production.total_shoot_days}-day shoot · {scenes.length} scenes · {locations.length} locations · starts {production.start_date}
+          </p>
         </div>
-        <h1 className="font-display mt-1 text-[30px] font-semibold leading-tight tracking-tight text-[var(--cc-text-primary)]">
-          {production.title}
-        </h1>
-        <p className="mt-1.5 text-[14px] text-[var(--cc-text-secondary)]">
-          {production.total_shoot_days}-day shoot · {scenes.length} scenes · {locations.length} locations · starts {production.start_date}
-        </p>
+
+        <div className="flex items-center gap-3">
+          <Button
+            data-testid="import-schedule-pdf-btn"
+            variant="outline"
+            onClick={() => setImportModalOpen(true)}
+            className="rounded-[10px] border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] hover:bg-[var(--cc-surface-hover)] flex items-center gap-2 shadow-sm"
+          >
+            <Upload size={14} />
+            <span>Import schedule (PDF)</span>
+          </Button>
+          <Button
+            data-testid="dashboard-report-disruption-btn"
+            onClick={() => navigate("/report")}
+            className="rounded-[10px] bg-[var(--cc-text-primary)] text-[var(--cc-canvas)] hover:bg-[var(--cc-text-primary)]/90 shadow-sm"
+          >
+            Report disruption
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -259,6 +282,20 @@ export default function DashboardPage({ activeCaseId }) {
           </div>
         </div>
       </div>
+
+      <ScheduleImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        productionId={selectedId}
+        onImportComplete={async () => {
+          try {
+            const updated = await getProduction(selectedId);
+            setBundle(updated);
+          } catch (e) {
+            console.error("Failed to refresh production after schedule import", e);
+          }
+        }}
+      />
     </div>
   );
 }

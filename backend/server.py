@@ -41,6 +41,7 @@ from services import (  # noqa: E402
     mcp_client,
     nl_parser,
     scene_generator,
+    schedule_extractor,
 )
 from services.geo_service import geocode_location, resolve_geo_economics  # noqa: E402
 
@@ -319,6 +320,57 @@ async def import_production_history(
         "studio_id": studio_id,
         **res,
     }
+
+
+@api.post("/productions/{production_id}/import-schedule")
+async def import_schedule_pdf(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    file: UploadFile = File(...),
+):
+    """Upload a shooting-schedule or call-sheet PDF for Gemini document understanding."""
+    bundle = await clickhouse_client.fetch_production_bundle(production_id)
+    if bundle is None:
+        raise HTTPException(404, f"Production {production_id} not found.")
+
+    content_bytes = await file.read()
+    try:
+        schedule_extractor.validate_pdf_bytes(content_bytes, filename=file.filename or "schedule.pdf")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    job_id = schedule_extractor.create_import_job(
+        production_id=production_id,
+        filename=file.filename or "schedule.pdf",
+        file_size_bytes=len(content_bytes),
+    )
+
+    # Launch background async worker (non-blocking)
+    asyncio.create_task(schedule_extractor.process_schedule_pdf_async(job_id, content_bytes))
+
+    job = schedule_extractor.get_import_job(job_id)
+    return job
+
+
+@api.get("/imports/{job_id}")
+async def get_schedule_import_job(job_id: str):
+    """Poll status and preview of an asynchronous PDF schedule import job."""
+    job = schedule_extractor.get_import_job(job_id)
+    if not job:
+        raise HTTPException(404, f"Import job '{job_id}' not found.")
+    return job
+
+
+@api.post("/imports/{job_id}/confirm")
+async def confirm_schedule_import(job_id: str):
+    """Confirm previewed schedule extraction and upsert rows into ClickHouse."""
+    try:
+        res = await schedule_extractor.confirm_and_import_schedule(job_id)
+        return res
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        logger.error("Failed to confirm schedule import job %s: %s", job_id, exc)
+        raise HTTPException(500, f"Failed to persist schedule rows: {exc}")
 
 
 @api.get("/productions/{production_id}/studio-cohort")

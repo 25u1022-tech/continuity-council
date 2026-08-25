@@ -183,6 +183,57 @@ async def generate_json(prompt: str, timeout: float = 6.0, max_tokens: int = 512
         return None
 
 
+async def generate_json_with_pdf(
+    pdf_bytes: bytes,
+    prompt: str,
+    timeout: float = 30.0,
+    max_tokens: int = 4096,
+) -> Optional[Any]:
+    """Extract structured JSON from PDF bytes using Gemini's native multimodal understanding."""
+    if not is_configured():
+        return None
+    if quota_hit():
+        remaining = max(0.0, (_quota_reset_at or 0.0) - time.time())
+        logger.info("Quota cooldown active (%.1fs remaining) — skipping Gemini generate_json_with_pdf", remaining)
+        return None
+    try:
+        from google.genai import types
+
+        client = _get_client()
+        part = types.Part.from_bytes(
+            data=pdf_bytes,
+            mime_type="application/pdf",
+        )
+        resp = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=model_name(),
+                contents=[part, prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                    max_output_tokens=max_tokens,
+                    thinking_config=_thinking(),
+                ),
+            ),
+            timeout=timeout,
+        )
+        text = (resp.text or "").strip()
+        _record_result(None)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Gemini generate_json_with_pdf failed: %s", exc)
+        _record_result(exc)
+        return None
+
+    if not text:
+        return None
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as jde:
+        logger.warning("Gemini returned unparsable PDF JSON (%s): %.200s", jde, text)
+        return None
+
+
 async def request_tool_calls(
     prompt: str,
     tool_declarations: List[Dict[str, Any]],

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS continuity_council.productions
     currency String DEFAULT 'USD',
     director String DEFAULT '',
     tier String DEFAULT 'mid',
+    studio_id String DEFAULT 'global',
     created_at DateTime DEFAULT now()
 )
 ENGINE = MergeTree
@@ -31,6 +32,10 @@ CREATE TABLE IF NOT EXISTS continuity_council.locations
     longitude Float64 DEFAULT 0.0,
     currency_code String DEFAULT 'USD',
     notes String DEFAULT '',
+    country_code String DEFAULT 'US',
+    country_mult Float32 DEFAULT 1.0,
+    city_tier String DEFAULT 'tier_1',
+    geo_mult Float32 DEFAULT 1.0,
     created_at DateTime DEFAULT now()
 )
 ENGINE = MergeTree
@@ -125,6 +130,7 @@ CREATE TABLE IF NOT EXISTS continuity_council.disruption_history
     compliance_risk_score Float32,
     success_score Float32,
     notes String DEFAULT '',
+    studio_id String DEFAULT 'global',
     created_at DateTime DEFAULT now()
 )
 ENGINE = MergeTree

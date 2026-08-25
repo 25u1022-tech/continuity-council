@@ -323,3 +323,24 @@ def new_case(report: DisruptionReport) -> CaseState:
     case.touch_stage("DISRUPTION_REPORTED")
     case.touch_stage("CASE_CREATED")
     return case
+
+
+class ScheduleImportJobResponse(BaseModel):
+    job_id: str
+    production_id: str
+    filename: str
+    file_size_bytes: int
+    status: Literal["pending", "processing", "ready", "failed", "confirmed"]
+    created_at: str
+    preview: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class ScheduleImportConfirmResponse(BaseModel):
+    success: bool
+    production_id: str
+    days_count: int = 0
+    scenes_count: int = 0
+    cast_count: int = 0
+    locations_count: int = 0
+

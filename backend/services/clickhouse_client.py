@@ -518,6 +518,147 @@ async def get_current_schedule(production_id: str) -> Optional[Dict[str, Any]]:
     return await fetch_production_bundle(production_id)
 
 
+async def upsert_extracted_schedule(
+    production_id: str,
+    scenes: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    cast_members: List[Dict[str, Any]],
+    total_shoot_days: int = 1,
+) -> Dict[str, int]:
+    """Normalize and upsert extracted PDF schedule rows into ClickHouse."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def _upsert():
+        c = _get_client()
+        db = _db()
+
+        # 1. Upsert new locations if not already existing
+        existing_locs = c.query(
+            f"SELECT location_id, lower(name) FROM {db}.locations WHERE production_id = %(pid)s",
+            parameters={"pid": production_id},
+        )
+        existing_loc_names = {r[1]: r[0] for r in existing_locs.result_rows}
+        locs_to_insert = []
+        for l in locations:
+            lname_clean = str(l.get("name", "")).strip().lower()
+            if lname_clean and lname_clean not in existing_loc_names:
+                loc_id = l.get("location_id") or f"loc_{short_id()}"
+                existing_loc_names[lname_clean] = loc_id
+                locs_to_insert.append([
+                    production_id, loc_id, l.get("name", "Extracted Location"),
+                    l.get("location_type", "interior"), int(l.get("capacity", 100)),
+                    int(l.get("daily_fee_usd", 5000)), float(l.get("latitude", 0.0)),
+                    float(l.get("longitude", 0.0)), l.get("currency_code", "USD"),
+                    l.get("notes", "Imported from PDF"), l.get("country_code", "US"),
+                    float(l.get("country_mult", 1.0)), l.get("city_tier", "tier_1"),
+                    float(l.get("geo_mult", 1.0)), now
+                ])
+        if locs_to_insert:
+            c.insert(
+                f"{db}.locations", locs_to_insert,
+                column_names=[
+                    "production_id", "location_id", "name", "location_type", "capacity",
+                    "daily_fee_usd", "latitude", "longitude", "currency_code", "notes",
+                    "country_code", "country_mult", "city_tier", "geo_mult", "created_at"
+                ]
+            )
+
+        # 2. Upsert new cast members if not already existing
+        existing_cast = c.query(
+            f"SELECT cast_id, lower(name) FROM {db}.cast_members WHERE production_id = %(pid)s",
+            parameters={"pid": production_id},
+        )
+        existing_cast_names = {r[1]: r[0] for r in existing_cast.result_rows}
+        cast_to_insert = []
+        for cm in cast_members:
+            cname_clean = str(cm.get("name", "")).strip().lower()
+            if cname_clean and cname_clean not in existing_cast_names:
+                cid = cm.get("cast_id") or f"cast_{short_id()}"
+                existing_cast_names[cname_clean] = cid
+                cast_to_insert.append([
+                    production_id, cid, cm.get("name", "Actor"),
+                    cm.get("role_type", "supporting"), int(cm.get("day_rate_usd", 1200)), now
+                ])
+        if cast_to_insert:
+            c.insert(
+                f"{db}.cast_members", cast_to_insert,
+                column_names=["production_id", "cast_id", "name", "role_type", "day_rate_usd", "created_at"]
+            )
+
+        # 3. Replace scenes in production_schedule
+        if scenes:
+            try:
+                c.command(
+                    f"ALTER TABLE {db}.production_schedule DELETE WHERE production_id = %(pid)s",
+                    parameters={"pid": production_id},
+                )
+            except Exception as exc:
+                logger.debug("Failed to delete old schedule rows (continuing): %s", exc)
+
+            scene_rows = []
+            for s in scenes:
+                # Map location name to ID if needed
+                loc_id = s.get("location_id", "")
+                if not loc_id and s.get("location_name"):
+                    loc_id = existing_loc_names.get(s["location_name"].strip().lower(), "stage_a")
+
+                # Map cast names to IDs if needed
+                req_cast = []
+                for c_name in s.get("cast_names", []):
+                    c_clean = c_name.strip().lower()
+                    if c_clean in existing_cast_names:
+                        req_cast.append(existing_cast_names[c_clean])
+                    elif c_name in [r[0] for r in existing_cast.result_rows]:
+                        req_cast.append(c_name)
+
+                scene_rows.append([
+                    production_id,
+                    s.get("scene_id") or f"sc_{s.get('scene_number', short_id())}",
+                    s.get("scene_title") or f"Scene {s.get('scene_number', '1')}",
+                    int(s.get("shoot_day", 1)),
+                    int(s.get("sequence_order", 1)),
+                    loc_id or "stage_a",
+                    req_cast,
+                    s.get("int_ext", "INT"),
+                    int(s.get("is_cover_scene", 0)),
+                    int(s.get("priority", 3)),
+                    s.get("continuity_tags", []),
+                    s.get("depends_on", []),
+                    "scheduled",
+                    now
+                ])
+            c.insert(
+                f"{db}.production_schedule", scene_rows,
+                column_names=[
+                    "production_id", "scene_id", "scene_title", "shoot_day",
+                    "sequence_order", "location_id", "required_cast", "scene_type",
+                    "is_cover_scene", "priority", "continuity_tags", "depends_on",
+                    "status", "updated_at"
+                ]
+            )
+
+        # 4. Update total_shoot_days on production if extracted days exceed current
+        if total_shoot_days > 0:
+            try:
+                c.command(
+                    f"ALTER TABLE {db}.productions UPDATE total_shoot_days = %(td)s WHERE production_id = %(pid)s",
+                    parameters={"td": int(total_shoot_days), "pid": production_id},
+                )
+            except Exception as exc:
+                logger.debug("Failed to update total_shoot_days: %s", exc)
+
+        return {
+            "scenes_count": len(scenes),
+            "locations_count": len(locations),
+            "cast_count": len(cast_members),
+            "total_shoot_days": total_shoot_days,
+        }
+
+    res = await _run(_upsert)
+    _tick(f"UPSERT schedule · {production_id}", len(scenes))
+    return res
+
+
 # ---------------------------------------------------------------------------
 # Event writes (append-only)
 # ---------------------------------------------------------------------------

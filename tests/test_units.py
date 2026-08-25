@@ -1707,6 +1707,203 @@ class TestNLDisruptionParser:
         assert res["parsed"] is None
 
 
+class TestSchedulePDFExtractor:
+    """Test suite for PDF shooting schedule ingestion via Gemini document understanding."""
+
+    TINY_PDF_BYTES = (
+        b"%PDF-1.4\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\n"
+        b"xref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\n"
+        b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n180\n%%EOF"
+    )
+
+    def test_validate_pdf_bytes_success(self):
+        from services.schedule_extractor import validate_pdf_bytes
+        # Should not raise
+        validate_pdf_bytes(self.TINY_PDF_BYTES, "callsheet.pdf")
+
+    def test_validate_pdf_bytes_non_pdf_rejected(self):
+        import pytest
+        from services.schedule_extractor import validate_pdf_bytes
+
+        with pytest.raises(ValueError, match="Only valid PDF files are supported"):
+            validate_pdf_bytes(b"NOT A PDF FILE", "notes.txt")
+
+    def test_validate_pdf_bytes_oversize_rejected(self):
+        import pytest
+        from services.schedule_extractor import validate_pdf_bytes
+
+        oversized = b"%PDF-" + b"0" * (11 * 1024 * 1024)
+        with pytest.raises(ValueError, match="exceeds 10MB limit"):
+            validate_pdf_bytes(oversized, "huge.pdf")
+
+    def test_validate_pdf_bytes_excessive_pages_rejected(self):
+        import pytest
+        from services.schedule_extractor import validate_pdf_bytes
+
+        multi_page_pdf = b"%PDF-1.4\n" + (b"/Type /Page\n" * 25) + b"%%EOF"
+        with pytest.raises(ValueError, match="exceeds maximum page limit of 20"):
+            validate_pdf_bytes(multi_page_pdf, "long.pdf")
+
+    def test_normalize_extracted_data_from_fixture(self):
+        from services.schedule_extractor import normalize_extracted_data
+
+        fixture = {
+            "shoot_days": [
+                {"day_number": 2, "date": "2026-08-25", "scenes": ["2A", "3"]},
+                {"day_number": 1, "date": "2026-08-24", "scenes": ["1"]},
+            ],
+            "scenes": [
+                {
+                    "scene_number": "2A",
+                    "scene_title": "Interrogation Room Heated Exchange",
+                    "location_name": "Stage A - Interrogation Set",
+                    "cast_names": ["Mara Voss", "Dev Okafor", "Mara Voss"],  # Duplicate cast name in scene
+                    "int_ext": "int. stage",
+                    "day_night": "NIGHT",
+                    "shoot_day": 2,
+                },
+                {
+                    "scene_number": "1",
+                    "scene_title": "Harbor Pier Arrival",
+                    "location_name": "Harbor Pier 7 Exterior",
+                    "cast_names": ["Mara Voss"],
+                    "int_ext": "EXTERIOR",
+                    "day_night": "day",
+                    "shoot_day": 1,
+                },
+            ],
+            "locations": ["Harbor Pier 7 Exterior", "Stage A - Interrogation Set", "Harbor Pier 7 Exterior"],  # Duplicate
+            "cast": ["Mara Voss", "Dev Okafor", "Mara Voss", "Lena Petrov"],  # Duplicate
+        }
+
+        normalized = normalize_extracted_data(fixture, default_start_date="2026-08-24")
+
+        # 1. Cast deduplicated
+        cast_names = [c["name"] for c in normalized["cast"]]
+        assert len(cast_names) == 3
+        assert set(cast_names) == {"Mara Voss", "Dev Okafor", "Lena Petrov"}
+
+        # 2. Locations deduplicated
+        loc_names = [l["name"] for l in normalized["locations"]]
+        assert len(loc_names) == 2
+
+        # 3. Scenes sorted by shoot day & sequence
+        scenes = normalized["scenes"]
+        assert len(scenes) == 2
+        assert scenes[0]["scene_number"] == "1"
+        assert scenes[0]["shoot_day"] == 1
+        assert scenes[0]["int_ext"] == "EXT"
+        assert scenes[0]["day_night"] == "DAY"
+
+        assert scenes[1]["scene_number"] == "2A"
+        assert scenes[1]["shoot_day"] == 2
+        assert scenes[1]["int_ext"] == "INT"
+        assert scenes[1]["day_night"] == "NIGHT"
+
+        # 4. Total shoot days derived correctly
+        assert normalized["total_shoot_days"] == 2
+
+    def test_import_schedule_endpoint_lifecycle(self):
+        import asyncio
+        import io
+        from unittest.mock import AsyncMock, patch
+        from fastapi.testclient import TestClient
+        from server import app
+        from services import schedule_extractor
+
+        client = TestClient(app)
+
+        mock_extraction = {
+            "shoot_days": [
+                {"day_number": 1, "date": "2026-08-24", "scenes": ["1", "2"]},
+            ],
+            "scenes": [
+                {
+                    "scene_number": "1",
+                    "scene_title": "Harbor Setup",
+                    "location_name": "Harbor Pier 7",
+                    "cast_names": ["Mara Voss"],
+                    "int_ext": "EXT",
+                    "day_night": "DAY",
+                    "shoot_day": 1,
+                },
+                {
+                    "scene_number": "2",
+                    "scene_title": "Loft Confrontation",
+                    "location_name": "Downtown Loft",
+                    "cast_names": ["Mara Voss", "Dev Okafor"],
+                    "int_ext": "INT",
+                    "day_night": "NIGHT",
+                    "shoot_day": 1,
+                },
+            ],
+            "locations": ["Harbor Pier 7", "Downtown Loft"],
+            "cast": ["Mara Voss", "Dev Okafor"],
+        }
+
+        with patch("services.gemini_client.generate_json_with_pdf", new_callable=AsyncMock) as mock_gemini:
+            mock_gemini.return_value = mock_extraction
+
+            # 1. POST /api/productions/prod_001/import-schedule
+            files = {"file": ("shooting_schedule.pdf", io.BytesIO(self.TINY_PDF_BYTES), "application/pdf")}
+            resp = client.post("/api/productions/prod_001/import-schedule", files=files)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "job_id" in data
+            job_id = data["job_id"]
+            assert data["status"] in ("pending", "processing", "ready")
+
+            # Run the background worker synchronously for test verification
+            asyncio.run(schedule_extractor.process_schedule_pdf_async(job_id, self.TINY_PDF_BYTES))
+
+            # 2. GET /api/imports/{job_id} -> preview
+            get_resp = client.get(f"/api/imports/{job_id}")
+            assert get_resp.status_code == 200
+            job_data = get_resp.json()
+            assert job_data["status"] == "ready"
+            assert job_data["preview"] is not None
+            assert job_data["preview"]["scenes_count"] == 2
+            assert job_data["preview"]["cast_count"] == 2
+            assert job_data["preview"]["locations_count"] == 2
+
+            # 3. POST /api/imports/{job_id}/confirm
+            with patch("services.clickhouse_client.upsert_extracted_schedule", new_callable=AsyncMock) as mock_upsert:
+                mock_upsert.return_value = {
+                    "scenes_count": 2,
+                    "locations_count": 2,
+                    "cast_count": 2,
+                    "total_shoot_days": 1,
+                }
+                conf_resp = client.post(f"/api/imports/{job_id}/confirm")
+                assert conf_resp.status_code == 200
+                conf_data = conf_resp.json()
+                assert conf_data["success"] is True
+                assert conf_data["scenes_count"] == 2
+
+    def test_import_schedule_failure_fallback(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from fastapi.testclient import TestClient
+        from server import app
+        from services import schedule_extractor
+
+        client = TestClient(app)
+
+        with patch("services.gemini_client.generate_json_with_pdf", side_effect=Exception("Gemini quota exhausted")):
+            # Create a job with empty/invalid bytes that will fail extraction
+            job_id = schedule_extractor.create_import_job("prod_001", "corrupt.pdf", 100)
+            asyncio.run(schedule_extractor.process_schedule_pdf_async(job_id, b"%PDF-1.4 UNREADABLE GARBAGE"))
+
+            job = schedule_extractor.get_import_job(job_id)
+            assert job["status"] == "failed"
+            assert "We couldn't read this schedule" in job["error"]
+            assert "manually or via CSV" in job["error"]
+
+
+
 
 
 
