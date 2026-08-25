@@ -6,14 +6,14 @@
 >
 > Built for the **"Lights. Camera. Code."** Hackathon — **ClickHouse Track**.
 
-When a production disruption hits (lead actor out, location lost, weather delay, equipment failure), Continuity Council triggers an autonomous multi-agent recovery council built on **Google Agent Development Kit (ADK)**. The council investigates constraints, queries **historical disruption records in ClickHouse through the official `mcp-clickhouse` MCP server at runtime**, evaluates bottom-up rate-card economics with live weather and FX data, ranks recovery options via the TRD weighted scoring formula, and commits producer-approved decisions to an immutable ClickHouse ledger.
+When a production disruption hits (lead actor injury/illness, extreme weather, lost location permit, equipment breakdown), Continuity Council dispatches an autonomous multi-agent recovery council built on the **Google Agent Development Kit (ADK)**. The council investigates constraints, queries **200,000+ historical disruption benchmarks in ClickHouse Cloud through the official `mcp-clickhouse` MCP server at runtime**, computes bottom-up rate-card economics with live weather and FX data, ranks recovery options via the TRD weighted utility formula, and commits producer-approved decisions to an immutable ClickHouse audit ledger.
 
 - **Hosted URL:** [HOSTED_URL]
 - **License:** MIT
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -39,14 +39,14 @@ When a production disruption hits (lead actor out, location lost, weather delay,
 │  │  STAGE 2: Parallel Specialist Evaluation                             │  │
 │  │  └─► parallel_evaluator (Google ADK ParallelAgent)                    │  │
 │  │        ├─► budget_sentinel_agent (MCP Historical Query Engine)        │  │
-│  │        │     └─► SafeQueryBuilder (SELECT-only templates)             │  │
+│  │        │     └─► SafeQueryBuilder (SELECT-only allowlisted templates) │  │
 │  │        │           └─► Persistent MCP Client (stdio)                  │  │
 │  │        │                 └─► official mcp-clickhouse server           │  │
 │  │        │                       └─► ClickHouse Cloud (MV query)        │  │
 │  │        ├─► continuity_memory_agent (DAG & Narrative Integrity)       │  │
 │  │        │     └─► validate_continuity (prerequisites & costume tags)   │  │
 │  │        ├─► compliance_agent (Operational Constraints)                 │  │
-│  │        │     └─► validate_compliance (100mi transit & permit bounds)  │  │
+│  │        │     └─► validate_compliance (100mi transit, turnaround, SAG) │  │
 │  │        └─► schedule_optimizer_agent (Description Polishing)           │  │
 │  │              └─► polish_descriptions (Gemini 3.6-flash generation)   │  │
 │  │                                                                       │  │
@@ -75,52 +75,101 @@ When a production disruption hits (lead actor out, location lost, weather delay,
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**The Workflow Loop:**
-1. **PDF Shooting Schedule Ingestion (Gemini Document Understanding)** $\rightarrow$ Producers upload call-sheet or shooting-schedule PDFs; Gemini extracts scenes, shoot days, cast, and filming locations directly into ClickHouse with preview review.
-2. **Natural-language Disruption Reporting** $\rightarrow$ Producer enters free-text incidents ("Sarah broke her wrist, can't shoot Tuesday"); calendar-aware entity and day resolution pre-fills structured form.
-3. **ADK Orchestration** $\rightarrow$ `Runner.run_async()` launches `SequentialAgent`.
-4. **Stage 1 (Generation)** $\rightarrow$ Deterministic formulation of viable recovery moves.
-5. **Stage 2 (Parallel Specialists)** $\rightarrow$ `ParallelAgent` evaluates ClickHouse MCP empirical benchmarks, narrative continuity DAGs, union/transit compliance, and option copy.
-6. **Stage 3 (Synthesis)** $\rightarrow$ Bottom-up rate cards calibrated with live weather & FX signals, scored via TRD formula, with one-line natural-language explainability justifications citing ClickHouse evidence.
-7. **Producer Review & Imagen 3 Mood-Boards** $\rightarrow$ Producer reviews grounded options with plain-English justifications and can click on-demand **Imagen 3 visual mood-boards** for alternate locations before approving recovery plans.
-8. **Chatbot Reasoning & Gemini TTS Voice** $\rightarrow$ Universal council assistant answers inquiries using ClickHouse evidence with optional **Gemini 3.1 Flash TTS** voice accessibility.
-9. **Post-Approval Audit** $\rightarrow$ `Auditor` commits immutable audit ledger and schedule delta records to ClickHouse Cloud.
-
 ---
 
-## 🤖 Built with Google Agent Development Kit (ADK)
+## 🤖 Multi-Agent Architecture (Google ADK)
 
-Continuity Council is engineered natively on Google's **Agent Development Kit (ADK)** (`google-adk`), orchestrating specialist agents through hierarchical multi-agent composition (`SequentialAgent` and `ParallelAgent`). ADK provides predictable state management, typed session memory (`InMemorySessionService`), robust async generator execution (`Runner.run_async`), and production-grade tool calling schemas (`FunctionTool`).
+Continuity Council's core investigation pipeline is built natively with Google's **Agent Development Kit (ADK)** (`google-adk`). It coordinates specialized agents through hierarchical composition (`SequentialAgent` and `ParallelAgent`), asynchronous execution (`Runner.run_async`), typed in-memory session management (`InMemorySessionService`), and typed tool declarations (`FunctionTool`).
 
-### The Council Agents & Responsibilities
+### The Council Agents
 
 | Agent | ADK Class | Role in Pipeline | Primary Mechanism / Tools |
 |---|---|---|---|
-| **Orchestrator** | `SequentialAgent` | Top-level pipeline coordinator | Drives Stage 1 $\rightarrow$ Stage 2 $\rightarrow$ Stage 3 via `Runner.run_async` |
-| **Generate Agent** | `BaseAgent` | Candidate schedule recovery generator | `generate_options_tool` formulation of scene swaps, holds, and cover pulls |
-| **Budget Sentinel** | `BaseAgent` / `Agent` | ClickHouse empirical cost & delay benchmark engine | `query_disruption_history_tool` via official `mcp-clickhouse` MCP server |
-| **Continuity Memory** | `BaseAgent` / `Agent` | Narrative sequence & costume continuity solver | `evaluate_continuity_risks_tool` dependency DAG & wardrobe tag validation |
-| **Compliance** | `BaseAgent` / `Agent` | Operational feasibility & union rule validator | `validate_compliance_rules_tool` enforcing permits, hours, and 100mi transit rule |
-| **Schedule Optimizer** | `BaseAgent` / `Agent` | Recovery description refiner | `generate_recovery_options_tool` + Gemini 3.6-flash structured polishing |
-| **Synthesis Agent** | `BaseAgent` / `Agent` | Economic calibration & executive rationale | `calibrate_and_synthesize_tool` combining rate cards, weather, FX & TRD scoring |
-| **Auditor** *(Post-Approval)* | `Agent` | Immutable ledger writer | `write_decision_ledger_tool` writing to ClickHouse `decision_ledger` |
+| **Orchestrator** | `SequentialAgent` | Top-level pipeline coordinator | Executes Stage 1 $\rightarrow$ Stage 2 $\rightarrow$ Stage 3 via `Runner.run_async` |
+| **Generate Agent** | `BaseAgent` | Candidate schedule recovery generator | `generate_options_tool` generates 2–4 deterministic schedule permutations |
+| **Budget Sentinel** | `BaseAgent` / `Agent` | ClickHouse empirical benchmark engine | `query_disruption_history_tool` queries ClickHouse via official `mcp-clickhouse` FastMCP |
+| **Continuity Memory** | `BaseAgent` / `Agent` | Narrative sequence & wardrobe solver | `evaluate_continuity_risks_tool` validates prerequisite DAGs & costume tags |
+| **Compliance Sentinel** | `BaseAgent` / `Agent` | Operational feasibility & union rule validator | `validate_compliance_rules_tool` enforces SAG-AFTRA 12h turnaround & 100mi transit limit |
+| **Schedule Optimizer** | `BaseAgent` / `Agent` | Recovery description refiner | `generate_recovery_options_tool` + Gemini structured text polishing |
+| **Synthesis Agent** | `BaseAgent` / `Agent` | Economic calibration & executive rationale | `calibrate_and_synthesize_tool` combines rate cards, weather, FX & TRD ranking |
+| **Auditor** *(Post-Approval)* | `Agent` | Immutable ledger writer | `write_decision_ledger_tool` writes tamper-evident SHA-256 records to ClickHouse |
 
 > [!IMPORTANT]
 > **Architectural Segregation of the Auditor Agent**:
-> The `Auditor` is deliberately decoupled from the initial disruption investigation pipeline. It executes strictly upon human producer approval (`POST /api/cases/{case_id}/approve`), guaranteeing that unapproved options never pollute permanent ClickHouse ledger records.
+> The `Auditor` agent is strictly decoupled from initial candidate investigation. It runs **only after human producer approval** (`POST /api/cases/{case_id}/approve`), guaranteeing that unapproved options never contaminate ClickHouse audit tables.
 
 ---
 
-## ⚡ Runtime ClickHouse MCP Usage (Judge Checklist)
+## ⚡ ClickHouse Cloud & MCP Runtime Integration
 
 1. **Official `mcp-clickhouse` Stdio Server**:
-   [`backend/services/mcp_client.py`](backend/services/mcp_client.py) spawns the official `mcp-clickhouse` server as a persistent stdio subprocess and manages a singleton `ClientSession` (`initialize` $\rightarrow$ `list_tools` $\rightarrow$ `call_tool("run_query")`).
-2. **Safe Query Builder (Zero Raw SQL Injection)**:
-   [`backend/services/safe_query_builder.py`](backend/services/safe_query_builder.py) enforces that the LLM never generates raw SQL. Queries are constructed exclusively from predefined, parameter-allowlisted SELECT templates with banned-keyword validation against the `strategy_performance_mv` materialized view.
+   [`backend/services/mcp_client.py`](backend/services/mcp_client.py) manages a persistent stdio subprocess running the official `mcp-clickhouse` FastMCP server with session lifecycle handling (`initialize` $\rightarrow$ `list_tools` $\rightarrow$ `call_tool("run_query")`).
+2. **Safe Query Builder (Zero SQL Injection)**:
+   [`backend/services/safe_query_builder.py`](backend/services/safe_query_builder.py) ensures LLMs never emit raw SQL. All analytical queries use predefined, parameter-allowlisted SELECT templates with banned-keyword validation against the `strategy_performance_mv` materialized view.
 3. **Live MCP Ticker & Evidence Logs**:
-   The frontend displays real-time MCP call metrics (exact sanitized SQL, execution latency in milliseconds, row counts, and transport status) alongside side-by-side ClickHouse historical benchmarks.
-4. **Strict Security Boundaries**:
-   The MCP server runs in read-only mode (`CLICKHOUSE_ALLOW_WRITE_ACCESS=false`). Ledger writes are executed directly via `clickhouse-connect` append-only event tables.
+   The UI streams real-time MCP call metrics (sanitized SQL, execution latency in milliseconds, row count, transport status) alongside historical benchmarks from 200,000+ synthetic disruptions.
+4. **Security Boundaries**:
+   The MCP server runs in strict read-only mode (`CLICKHOUSE_ALLOW_WRITE_ACCESS=false`). Permanent audit records are written directly via `clickhouse-connect` append-only tables.
+
+---
+
+## 💬 Council Reasoning Chatbot (Gemini Function Calling)
+
+The **Council Reasoning** drawer provides a conversational interface for producers to inspect the council's reasoning.
+
+```text
+Producer Query ("Why was Option 1 recommended?")
+       ↓
+CouncilChatbot.ask() (backend/agents/council_chatbot.py)
+       ↓
+Gemini 3.6-flash (google-genai SDK)
+       ↓
+Autonomous Function Calling Loop (up to 3 turns)
+  ├── search_disruption_history (Historical ClickHouse benchmarks via SafeQueryBuilder)
+  ├── get_case_details (Active investigation status & generated recovery slates)
+  ├── explain_option_ranking (Option breakdown, TRD score, compliance checks)
+  └── check_shoot_plan (Production schedule + live Open-Meteo weather risk)
+       ↓
+Synthesized Grounded Response with Source Citations
+```
+
+- **SDK Architecture:** Built on the official **`google-genai` SDK** using native `FunctionDeclaration` tool schemas and multi-turn tool execution. *(Note: The chatbot uses `google-genai` function calling, while the core multi-agent pipeline uses Google ADK.)*
+- **Offline / Quota-Hit Deterministic Fallback:** If Gemini is unavailable or rate-limited, `_deterministic_fallback()` routes queries directly to the tools or knowledge bases (`HELP_KB`, `GENERAL_KB`) without downtime.
+- **Producer Guidance:** When asked about approving options, the chatbot provides clear instructions directing the user to the Recovery Options UI so the Auditor agent is triggered with human consent.
+- **Voice Accessibility:** Optional text-to-speech powered by `gemini-3.1-flash-tts` with client-side playback.
+
+---
+
+## ⚖️ Recovery Strategy Ranking (TRD Formula)
+
+Candidate recovery options are ranked using the calibrated TRD weighted utility formula:
+
+$$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavingScore} + 0.20 \cdot (1 - \text{ContinuityRisk}) + 0.10 \cdot (1 - \text{ComplianceRisk})$$
+
+- **Cost Saving Score (40%)**: Grounded 70% bottom-up rate card economics (crew, cast, stage fees) + 30% ClickHouse historical overrun benchmarks.
+- **Delay Saving Score (30%)**: Normalized against ClickHouse schedule delay distribution for the matching disruption type.
+- **Continuity Risk Score (20%)**: Evaluated by Continuity Memory against narrative DAG sequence dependencies and costume/prop continuity tags.
+- **Compliance Risk Score (10%)**: Evaluated by Compliance Sentinel against SAG-AFTRA turnaround rules (12h minimum rest), location permit windows, and the 100-mile same-day transit limit.
+- **Hard Constraint Penalty**: Options violating hard constraints (e.g. missing location permit, transit $>100\text{mi}$, or unavailable lead actor) are flagged as **Blocked** and penalized by $\times 0.25$.
+
+---
+
+## 🎬 End-to-End User Workflow
+
+1. **Schedule Ingestion (PDF / Custom)**:
+   Upload a call-sheet or shooting-schedule PDF for automated Gemini document understanding, or create a production via the interactive wizard.
+2. **Disruption Reporting**:
+   Enter natural-language text (*"Sarah broke her ankle, cannot shoot Tuesday"*) or use the structured form with real-time **Impact Preview** to see blocked scenes.
+3. **Dispatch Investigation Council**:
+   Click **Dispatch Investigation Council** to spawn the background ADK `Runner.run_async` pipeline.
+4. **Live Multi-Agent Investigation**:
+   Watch agents evaluate candidate slates in parallel, querying ClickHouse historical evidence via FastMCP.
+5. **Review Ranked Recovery Strategies**:
+   Compare grounded options with plain-English justifications, cost breakdowns, weather summaries, and on-demand **Imagen 3 visual mood-boards** for alternate locations.
+6. **Producer Approval**:
+   Select and approve the preferred strategy.
+7. **Immutable Audit Commit**:
+   The `Auditor` agent appends a permanent record with SHA-256 hash to ClickHouse `decision_ledger` and logs scene shifts to `schedule_changes`.
 
 ---
 
@@ -131,15 +180,15 @@ Continuity Council is engineered natively on Google's **Agent Development Kit (A
 | **Database** | **ClickHouse Cloud** | `clickhouse-connect` (v1.7.1) + official **`mcp-clickhouse`** (v0.4.1) FastMCP stdio server |
 | **Agent Framework** | **Google ADK** | `google-adk` (v2.7.1) with `SequentialAgent`, `ParallelAgent`, `Runner`, and `FunctionTool` |
 | **AI / LLM** | **Google Gemini** | `gemini-3.6-flash` via official `google-genai` SDK with resilient backoff & JSON repair |
-| **Visual AI** | **Google Imagen 3** | `imagen-3.0-generate-002` on-demand 16:9 cinematic mood-boards with 24h dual cache |
-| **Voice AI / TTS** | **Google Gemini TTS** | `gemini-3.1-flash-tts` non-blocking speech synthesis with 1h in-memory hash cache |
-| **Backend API** | **FastAPI + Python 3.11** | High-performance async ASGI server with Pydantic v2 schemas and Uvicorn |
-| **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface with live polling |
-| **Live Signals** | **Open-Meteo & ECB/Frankfurter** | Real-time weather precipitation risk and live ISO currency exchange rates |
+| **Visual AI** | **Google Imagen 3** | `imagen-3.0-generate-002` on-demand 16:9 cinematic mood-boards with dual cache |
+| **Voice AI / TTS** | **Google Gemini TTS** | `gemini-3.1-flash-tts` speech synthesis with in-memory hash cache |
+| **Backend API** | **FastAPI + Python 3.11** | Async ASGI server with Pydantic v2 domain schemas |
+| **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface |
+| **Live Signals** | **Open-Meteo & ECB/Frankfurter** | Real-time hourly weather forecast risk and live foreign exchange conversion |
 
 ---
 
-## 📁 Repository Layout
+## 📁 Project Structure
 
 ```text
 continuity-council/
@@ -150,6 +199,7 @@ continuity-council/
 │   ├── models.py                  # Pydantic v2 domain schemas (CaseState, RecoveryOption, etc.)
 │   ├── case_store.py              # In-memory thread-safe active case registry
 │   ├── scoring.py                 # TRD weighted scoring formula implementation
+│   ├── pytest.ini                 # Pytest configuration with fixed xdist workers
 │   ├── requirements.txt           # Pinned production dependencies (ADK, Gemini, ClickHouse, MCP)
 │   ├── agents/                    # Council agents
 │   │   ├── orchestrator.py        # ADK SequentialAgent + ParallelAgent + Runner investigation pipeline
@@ -157,39 +207,43 @@ continuity-council/
 │   │   ├── continuity_memory.py   # Narrative sequence DAG & wardrobe continuity solver
 │   │   ├── compliance.py          # Availability, permits, and 100mi transit rule validator
 │   │   ├── schedule_optimizer.py  # Candidate option generator + description polisher
-│   │   └── auditor.py             # ClickHouse immutable decision ledger writer
+│   │   ├── auditor.py             # ClickHouse immutable decision ledger writer
+│   │   └── council_chatbot.py     # Gemini function-calling conversational reasoning agent
 │   ├── services/                  # Supporting service modules
 │   │   ├── clickhouse_client.py   # Native clickhouse-connect queries & schema manager
 │   │   ├── mcp_client.py          # Persistent stdio client for official mcp-clickhouse server
 │   │   ├── safe_query_builder.py  # Allowlisted, parameter-checked SELECT query templates
-│   │   ├── gemini_client.py       # Resilient Gemini 3.6-flash wrapper with quota recovery
+│   │   ├── gemini_client.py       # Resilient Gemini wrapper with quota recovery
+│   │   ├── justification_service.py # Natural-language explainability justifications
+│   │   ├── schedule_extractor.py  # PDF shooting-schedule ingestion via Gemini
+│   │   ├── moodboard_service.py   # Imagen 3 location visual mood-board generator
+│   │   ├── tts_service.py         # Gemini TTS speech synthesis service
+│   │   ├── nl_parser.py           # Natural-language disruption parser
 │   │   ├── geo_service.py         # Haversine distance, city tiers, and World Bank PPP factors
 │   │   ├── weather_service.py     # Open-Meteo forecast API integration
 │   │   └── finance_service.py     # Frankfurter / ECB live foreign exchange conversion
-│   └── scripts/                   # Test & verification harnesses
-│       ├── demo_adk_council.py    # Judge-facing Rich CLI interactive demonstration
-│       ├── test_orchestrator_adk.py # End-to-end multi-agent investigation verification
-│       ├── test_budget_sentinel_adk.py # Budget Sentinel MCP ADK test
-│       └── adk_smoke_test.py      # Basic ADK Runner smoke test
+│   └── scripts/                   # Verification harnesses & proof scripts
+│       ├── test_orchestrator_adk.py # ADK multi-agent investigation verification
+│       └── test_budget_sentinel_adk.py # Budget Sentinel MCP ADK test
 ├── clickhouse/                    # ClickHouse SQL schema and seed scripts
 │   ├── schema.sql                 # 10 tables + strategy_performance_mv materialized view
-│   ├── seed.py                    # Seeds 6 diverse demo productions + 200,000+ synthetic disruptions
+│   ├── seed.py                    # Seeds 6 demo productions + 200,000+ synthetic disruptions
 │   └── queries.sql                # Benchmark queries
 ├── frontend/                      # React 18 single-page application
-│   ├── src/                       # UI components, pages, hooks, and API client (lib/api.js)
+│   ├── src/
+│   │   ├── components/            # UI components (CouncilChatbot, ActivityTicker, etc.)
+│   │   ├── pages/                 # Pages (Dashboard, Report, Investigation, Options, Ledger, Settings)
+│   │   ├── lib/api.js             # API client with error handling & cold start detection
+│   │   └── App.js                 # App routes and shell wrapper
 │   └── package.json               # Frontend dependencies (Tailwind, Lucide, Radix UI)
 ├── tests/                         # Automated test suite
-│   ├── test_units.py              # 61 domain unit tests (solvers, TRD scoring, safety, geo)
+│   ├── test_units.py              # Unit tests (solvers, TRD scoring, chatbot, PDF, TTS, moodboard)
+│   ├── test_import_and_blending.py # CSV import & studio cohort blending tests
 │   └── test_adk_production_orchestrator.py # Production ADK Runner integration test
-├── scripts/                       # Root-level proof scripts
-│   ├── test_mcp.py                # Standalone MCP stdio tool calling round-trip proof
-│   └── test_core.py               # Core ClickHouse + MCP + Gemini proof
-└── docs/                          # In-depth architectural and design documentation
-    ├── ARCHITECTURE.md            # Detailed enterprise system architecture
+└── docs/                          # In-depth architectural documentation
+    ├── ARCHITECTURE.md            # Detailed system architecture
     ├── COST_METHODOLOGY.md        # 70/30 rate-card and historical calibration math
-    ├── DATA_SOURCES.md            # Live signal attribution specification
-    ├── DATA_ONBOARDING.md         # Studio historical data ingestion specification
-    └── DEPLOYMENT.md              # Deployment guide (Render.com Docker runtime)
+    └── DEPLOYMENT.md              # Deployment guide (Render.com / Docker)
 ```
 
 ---
@@ -203,7 +257,7 @@ continuity-council/
 - A **Google Gemini API Key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ### 2. Environment Configuration
-Create `backend/.env` (copy from `.env.example`):
+Create `backend/.env` (copy from `backend/.env.example` if available):
 
 ```bash
 # ClickHouse Cloud Configuration
@@ -219,7 +273,7 @@ GEMINI_API_KEY=AIzaSyYourGeminiApiKey
 GEMINI_MODEL=gemini-3.6-flash
 ```
 
-Create `frontend/.env` (or `frontend/.env.local` for local dev):
+Create `frontend/.env` (or `frontend/.env.local`):
 ```bash
 REACT_APP_BACKEND_URL=http://localhost:8000
 ```
@@ -234,7 +288,7 @@ cd frontend && yarn install && cd ..
 ```
 
 ### 4. Database Initialization & Seeding
-Initialize the 10 ClickHouse tables and generate 200,000+ historical disruption benchmark rows:
+Initialize the 10 ClickHouse tables and generate 200,000+ historical disruption benchmarks:
 ```bash
 python clickhouse/seed.py
 ```
@@ -253,24 +307,22 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🧪 Verification & Test Suite
 
-The repository includes a comprehensive, verified test suite covering unit solvers, safety allowlists, live MCP round-trips, and production ADK Runner execution.
+The automated test suite verifies all unit solvers, ADK agent execution, ClickHouse queries, safe query templates, and frontend components.
 
 ```bash
-# 1. Run the dedicated ADK Production Orchestrator Integration Test
-python -m pytest tests/test_adk_production_orchestrator.py -v
-
-# 2. Run the full unit and integration test suite (62 passed, 2 skipped)
+# 1. Run all backend unit & integration tests
 python -m pytest tests/ -v
 
-# 3. Execute the Judge-Facing Interactive CLI Demonstration
-python backend/scripts/demo_adk_council.py
+# 2. Run the dedicated ADK Production Orchestrator test
+python -m pytest tests/test_adk_production_orchestrator.py -v
 
-# 4. Verify Live ClickHouse MCP Server stdio Tool Calling
-python scripts/test_mcp.py
-
-# 5. Verify End-to-End ADK Orchestrator with live ClickHouse MCP
-python backend/scripts/test_orchestrator_adk.py
+# 3. Run the frontend test suite
+cd frontend && yarn test --watchAll=false
 ```
+
+**Current Verified Test Results:**
+- **Backend Test Suite (`pytest`):** `107 passed, 2 skipped, 0 failed`
+- **Frontend Test Suite (`yarn test`):** `7 test suites passed, 30 passed, 0 failed`
 
 ---
 
@@ -280,39 +332,33 @@ All backend API routes are served under the `/api` prefix:
 
 | Method & Route | Purpose | Key Request / Response Parameters |
 |---|---|---|
-| `GET /api/health` | Service health status | Returns ClickHouse ping, Gemini model status, and MCP readiness |
-| `GET /api/productions` | List all productions | Production metadata, total days, active locations, and studio IDs |
-| `GET /api/productions/{id}` | Get production schedule | Full scene breakdown, cast availability, and current schedule overlays |
-| `POST /api/productions` | Create custom production | Onboards new production with cast, locations, and shoot schedule |
-| `POST /api/productions/{id}/import-history` | Import studio CSV | Bulk ingests historical disruptions for tenant cohort blending |
+| `GET /api/health` | Health check | ClickHouse ping, Gemini model status, MCP readiness |
+| `GET /api/productions` | List productions | Production titles, shoot spans, active locations |
+| `GET /api/productions/{id}` | Get production schedule | Full scene breakdown, cast availability, current schedule |
+| `POST /api/productions` | Create custom production | Onboards title with cast, locations, and shoot schedule |
+| `POST /api/productions/{id}/import-schedule` | Upload schedule PDF | Asynchronously extracts schedule via Gemini document understanding |
+| `GET /api/imports/{job_id}` | Poll PDF import status | Job status and extracted schedule preview |
+| `POST /api/imports/{job_id}/confirm` | Confirm PDF import | Persists confirmed schedule rows into ClickHouse |
+| `POST /api/productions/{id}/import-history` | Import studio CSV | Bulk ingests historical disruptions for studio cohort blending |
 | `GET /api/disruptions/impact-preview` | Pre-flight impact preview | Evaluates scenes directly blocked by cast or location unavailability |
-| `POST /api/disruptions` | Report disruption & start council | Spawns background ADK `Runner.run_async` multi-agent investigation |
+| `POST /api/disruptions/parse-nl` | Parse natural language | Parses free-text incident descriptions into structured disruption payload |
+| `POST /api/disruptions` | Report disruption | Dispatches background ADK `Runner.run_async` multi-agent investigation |
 | `GET /api/cases/{case_id}` | Live investigation polling | Real-time agent statuses, MCP call logs, ranked options, and rationale |
-| `POST /api/cases/{case_id}/approve` | Producer approval | Triggers `Auditor` to append immutable decision to ClickHouse ledger |
-| `GET /api/audit/{production_id}` | Retrieve audit trail | Complete decision ledger rows and granular schedule change events |
-| `GET /api/activity` | Live MCP activity ticker | Real-time stream of executed ClickHouse SQL queries and latencies |
-| `GET /api/evidence/drilldown` | Historical row drilldown | Inspects raw `disruption_history` rows matching selected strategy |
-| `POST /api/demo/reset` | Restore demo baseline | Clears volatile event tables to reset the demonstration state |
-
----
-
-## ⚖️ Option Scoring Model (TRD Formula)
-
-Candidate recovery options are ranked using the exact TRD weighted utility formula:
-
-$$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavingScore} + 0.20 \cdot (1 - \text{ContinuityRisk}) + 0.10 \cdot (1 - \text{ComplianceRisk})$$
-
-- **Cost Saving Score**: Normalized from grounded 70/30 calibrated financial estimate.
-- **Delay Saving Score**: Normalized from historical ClickHouse schedule disruption benchmarks.
-- **Continuity Risk Score**: Evaluated by Continuity Memory (prerequisite DAGs and costume tag breaks).
-- **Compliance Risk Score**: Evaluated by Compliance Agent (permits, maximum working hours, union rest).
-- **Hard Constraint Penalty**: Options violating hard operational rules (e.g. $>100\text{mi}$ same-day transit or missing location permits) are flagged as **Blocked** and penalized by $\times 0.25$.
+| `POST /api/cases/{case_id}/approve` | Producer approval | Triggers `Auditor` agent to append immutable record to ClickHouse |
+| `GET /api/locations/{id}/moodboard` | Location mood-board | On-demand Imagen 3 cinematic visual mood-board generation |
+| `POST /api/chat` | Council Reasoning Chat | Gemini function-calling agent with ClickHouse source citations |
+| `POST /api/chat/tts/generate` | Generate TTS audio | Asynchronously generates speech audio via Gemini TTS |
+| `GET /api/chat/tts` | Retrieve TTS audio | Streams cached audio stream (`audio/wav`) |
+| `GET /api/audit/{production_id}` | Retrieve audit trail | Append-only decision ledger entries and granular schedule change events |
+| `GET /api/activity` | Live MCP activity ticker | Stream of executed ClickHouse SQL queries and latencies |
+| `GET /api/evidence/drilldown` | Evidence row drilldown | Inspects raw `disruption_history` benchmark rows |
+| `POST /api/demo/reset` | Restore demo baseline | Clears volatile event rows to reset demo state |
 
 ---
 
 ## 🚢 Deployment
 
-Continuity Council is packaged as a unified, single-container multi-stage Docker build that compiles the React frontend into static assets and serves both the SPA and FastAPI backend from a single origin on port `8000`.
+Continuity Council is packaged as a unified multi-stage Docker container that builds the React frontend and serves both the SPA static assets and FastAPI backend from a single origin on port `8000`.
 
 ### Production Container (`Dockerfile`)
 ```dockerfile
@@ -323,31 +369,4 @@ EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### Render.com Deployment
-1. Create a **New Web Service** pointing to the repository.
-2. Select **Docker** as the environment.
-3. Configure the environment variables (`CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE`, `CLICKHOUSE_SECURE`, `GEMINI_API_KEY`, `GEMINI_MODEL`).
-4. Set Health Check path to `/api/health`.
-5. Deploy. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for further details.
-
----
-
-## 🎬 Judge Walkthrough (3-Minute Evaluation Loop)
-
-1. **Dashboard Overview**:
-   Select *The Long Dark Take* (`prod_001`). View the baseline 3-day production schedule, cast/location matrix, and 200,000+ row historical ClickHouse dataset.
-2. **Report a Disruption**:
-   Navigate to **Report Disruption**. File a disruption: *Lead Actor Unavailable* on **Day 2** (Severity: *Medium*, Lead Actor: *Mara Voss*).
-3. **Watch ADK Multi-Agent Council Execute**:
-   Navigate to **Investigation**. Observe live progress across all agents as the ADK `SequentialAgent` and `ParallelAgent` coordinate via `Runner.run_async()`. Inspect the **Live MCP Call Log** displaying actual SQL executed against ClickHouse Cloud in $\sim 100\text{--}200\text{ms}$.
-4. **Compare Grounded Recovery Options**:
-   Review the ranked recovery slates:
-   - **Option 1 (Shoot cover scenes)**: Lowest grounded cost and minimal delay, fully compliant.
-   - **Option 2 (Swap shoot days)**: Higher delay, blocked by Day 3 harbor permit constraints.
-   - **Option 3 (Wait for actor)**: High cost overrun and 11+ hour delay.
-5. **Inspect Historical Evidence & Rate-Card Calibration**:
-   Examine side-by-side ClickHouse empirical benchmarks and the 70% bottom-up + 30% historical blended cost calibration.
-6. **Producer Approval & Ledger Commit**:
-   Click **Approve Strategy** on Option 1. The `Auditor` agent immediately writes the immutable decision and schedule change records to ClickHouse Cloud.
-7. **Verify Decision Ledger**:
-   Navigate to **Decision Ledger** to view the permanent, append-only record with cryptographic IDs and timestamped scene shifts.
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for full deployment instructions on Render.com, Cloud Run, or any Docker-compatible host.

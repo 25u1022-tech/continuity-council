@@ -94,11 +94,13 @@ describe("CouncilChatbot Component", () => {
       await Promise.resolve();
     });
 
-    expect(api.sendChatMessage).toHaveBeenCalledWith({
-      message: "Why was the top option chosen?",
-      production_id: "prod_001",
-      case_id: "case_123",
-    });
+    expect(api.sendChatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Why was the top option chosen?",
+        production_id: "prod_001",
+        case_id: "case_123",
+      })
+    );
 
     expect(container.textContent).toContain("Option Shoot Cover Scenes was chosen");
     expect(container.textContent).toContain("ClickHouse Evidence Sources:");
@@ -171,6 +173,42 @@ describe("CouncilChatbot Component", () => {
     });
 
     expect(api.generateTTS).toHaveBeenCalledWith("Here is your disruption analysis.");
+  });
+
+  test("renders markdown ordered and unordered lists without duplicate numbering", async () => {
+    api.sendChatMessage.mockResolvedValueOnce({
+      answer: "Here is how to report a disruption step-by-step:\n\n1. Click Report disruption in the top navigation\n2. Select the Disruption Type\n3. Review the real-time Impact Preview\n\nKey considerations:\n- Cost\n- Delay\n- Continuity",
+      sources: [],
+    });
+
+    await act(async () => {
+      root.render(<CouncilChatbot productionId="prod_001" />);
+    });
+
+    const fab = container.querySelector("#council-chatbot-fab");
+    await act(async () => {
+      fab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const chipBtn = buttons.find((b) => b.textContent.includes("How do I report a disruption?"));
+    await act(async () => {
+      chipBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const decimalLis = container.querySelectorAll("li.list-decimal");
+    expect(decimalLis).toHaveLength(3);
+    // Ensure the inner text does not start with "1.", "2.", "3."
+    expect(decimalLis[0].textContent).toBe("Click Report disruption in the top navigation");
+    expect(decimalLis[1].textContent).toBe("Select the Disruption Type");
+    expect(decimalLis[2].textContent).toBe("Review the real-time Impact Preview");
+
+    const discLis = container.querySelectorAll("li.list-disc");
+    expect(discLis).toHaveLength(3);
+    expect(discLis[0].textContent).toBe("Cost");
+    expect(discLis[1].textContent).toBe("Delay");
+    expect(discLis[2].textContent).toBe("Continuity");
   });
 });
 

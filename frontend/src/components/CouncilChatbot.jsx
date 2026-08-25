@@ -163,6 +163,10 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         message: query,
         production_id: productionId,
         case_id: caseId,
+        conversation_history: messages.slice(-4).map((m) => ({
+          sender: m.sender,
+          text: m.text,
+        })),
       });
 
       const aiMsg = {
@@ -207,7 +211,13 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
     const lines = text.split("\n");
     return lines.map((line, idx) => {
       const isBullet = line.startsWith("• ") || line.startsWith("- ") || line.startsWith("* ");
-      const rawText = isBullet ? line.replace(/^(\s*[•\-\*]\s*)/, "") : line;
+      const isNumbered = /^\s*\d+[\.\)]\s/.test(line);
+      let rawText = line;
+      if (isBullet) {
+        rawText = line.replace(/^(\s*[•\-\*]\s*)/, "");
+      } else if (isNumbered) {
+        rawText = line.replace(/^(\s*\d+[\.\)]\s*)/, "");
+      }
 
       // Bold rendering **text**
       const parts = rawText.split(/(\*\*.*?\*\*)/g);
@@ -240,7 +250,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         );
       }
 
-      if (/^\d+\.\s/.test(line)) {
+      if (isNumbered) {
         return (
           <li key={idx} className="ml-4 list-decimal text-[12.5px] leading-relaxed">
             {formattedLine}

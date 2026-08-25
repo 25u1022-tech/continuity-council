@@ -86,6 +86,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     production_id: str = Field("prod_001", min_length=1, max_length=64)
     case_id: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, Any]]] = None
 
 
 class ChatResponse(BaseModel):

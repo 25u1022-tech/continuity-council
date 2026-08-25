@@ -824,6 +824,7 @@ async def chat_endpoint(req: ChatRequest):
                 question=req.message,
                 production_id=req.production_id,
                 case_id=req.case_id,
+                conversation_history=req.conversation_history,
             ),
             timeout=8.0,
         )

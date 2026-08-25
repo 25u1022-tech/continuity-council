@@ -131,10 +131,15 @@ export const resetDemo = (productionId) =>
     { method: "POST" }
   );
 
-export const sendChatMessage = ({ message, production_id, case_id }) =>
+export const sendChatMessage = ({ message, production_id, case_id, conversation_history }) =>
   request("/chat", {
     method: "POST",
-    body: { message, production_id, case_id: case_id || undefined },
+    body: {
+      message,
+      production_id,
+      case_id: case_id || undefined,
+      conversation_history: conversation_history || undefined,
+    },
   });
 
 // --- TTS (Text-to-Speech) -------------------------------------------------

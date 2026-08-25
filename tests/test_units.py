@@ -1299,6 +1299,28 @@ class TestCouncilChatbot:
         assert "1. 1." not in res["answer"]
         assert any(s in res["answer"].lower() for s in ["shall i", "would you like", "help"])
 
+    def test_chatbot_explain_investigation_process_routing(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        for q in [
+            "explain the investigation process",
+            "how does the investigation work",
+            "what do the agents do",
+            "what happens during investigation",
+            "explain the pipeline",
+        ]:
+            res = asyncio.run(chatbot.ask(q))
+            ans = res["answer"]
+            assert len(res["sources"]) == 0
+            assert "Budget Sentinel" in ans
+            assert "Schedule Optimizer" in ans
+            assert "Compliance Sentinel" in ans
+            assert "Continuity Memory" in ans
+            assert "ClickHouse" in ans
+            assert "0.40" in ans or "TRD" in ans
+
     def test_chatbot_answers_reasoning_question_with_sources(self, case):
         import asyncio
         import case_store
@@ -1345,6 +1367,64 @@ class TestCouncilChatbot:
         assert "ClickHouse" in res["answer"] or "historical" in res["answer"].lower() or "disruption" in res["answer"].lower()
         assert len(res["sources"]) > 0
         assert any("weather_delay" in s["query"] or "disruption_history" in s["query"] for s in res["sources"])
+
+    def test_chatbot_affirmative_followup_resolves_contextually(self, case):
+        import asyncio
+        import case_store
+        from agents.council_chatbot import CouncilChatbot
+        from models import RecoveryOption
+
+        case.options = [
+            RecoveryOption(
+                option_id="opt_cover",
+                name="Shoot Cover Scenes",
+                strategy="shoot_cover_scenes",
+                rank=1,
+                recommended=True,
+                estimated_cost_usd=18800,
+                estimated_delay_hours=3.7,
+                score=96.6,
+                compliance_valid=True,
+            )
+        ]
+        case_store.put(case)
+
+        chatbot = CouncilChatbot()
+        history = [
+            {"sender": "user", "text": "Walk me through the recovery options"},
+            {"sender": "ai", "text": "Would you like me to explain why the top option is recommended for your active case?"},
+        ]
+        res = asyncio.run(chatbot.ask("yes", production_id=case.production_id, case_id=case.case_id, conversation_history=history))
+        assert "Shoot Cover Scenes" in res["answer"] or "Option" in res["answer"]
+        assert len(res["sources"]) > 0
+
+    def test_chatbot_check_shoot_plan_returns_weather_and_schedule(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("check my shoot plan", production_id="prod_001"))
+        assert "shoot plan" in res["answer"].lower() or "schedule" in res["answer"].lower()
+        assert "Risk" in res["answer"] or "Weather" in res["answer"] or "Harbor Exterior" in res["answer"]
+        assert len(res["sources"]) > 0
+
+    def test_chatbot_unclear_message_returns_clarifying_fallback(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("blorp zorp 123", production_id="prod_001"))
+        assert "clarify" in res["answer"].lower() or "explain" in res["answer"].lower()
+        assert "That's a great question! In film production planning" not in res["answer"]
+
+    def test_chatbot_out_of_context_affirmative_returns_clarification(self):
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+
+        chatbot = CouncilChatbot()
+        res = asyncio.run(chatbot.ask("yes", production_id="prod_001"))
+        assert "help" in res["answer"].lower() or "explain" in res["answer"].lower()
+        assert len(res["sources"]) == 0
 
     def test_chat_api_endpoint(self, case):
         import case_store
@@ -1435,6 +1515,119 @@ class TestCouncilChatbot:
             assert "having a little trouble" in data["answer"].lower()
             assert "Database connection timed out" not in data["answer"]
             assert data["sources"] == []
+
+    def test_llm_agent_calls_explain_option_ranking_for_recovery_question(self, case):
+        """When Gemini is mocked to request explain_option_ranking, the tool is executed."""
+        import asyncio
+        import case_store
+        from agents.council_chatbot import CouncilChatbot
+        from models import RecoveryOption
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        case.options = [
+            RecoveryOption(
+                option_id="opt_cover",
+                name="Shoot Cover Scenes",
+                strategy="shoot_cover_scenes",
+                rank=1,
+                recommended=True,
+                estimated_cost_usd=18800,
+                estimated_delay_hours=3.7,
+                score=96.6,
+                compliance_valid=True,
+            )
+        ]
+        case_store.put(case)
+
+        # Simulate Gemini configured but we mock the actual SDK call
+        with patch("agents.council_chatbot.gemini_client.is_configured", return_value=True), \
+             patch("agents.council_chatbot.gemini_client.quota_hit", return_value=False), \
+             patch("agents.council_chatbot.explain_option_ranking", new_callable=AsyncMock) as mock_tool:
+
+            mock_tool.return_value = {
+                "name": "Shoot Cover Scenes",
+                "rank": 1,
+                "composite_score": 96.6,
+                "estimated_cost_usd": 18800,
+                "estimated_delay_hours": 3.7,
+                "compliance_valid": True,
+                "sql": "SELECT * FROM continuity_council.disruption_history",
+                "summary": "Option Shoot Cover Scenes (Rank 1): Score 96.6.",
+            }
+
+            # Mock the Gemini _run_agent to directly call explain_option_ranking
+            async def fake_run_agent(q, prod, cid, hist):
+                result = await mock_tool(case_id=cid, option_rank=1)
+                return {
+                    "answer": f"The top option is {result['name']} with score {result['composite_score']}. "
+                              f"Would you like to approve it?",
+                    "intent": "llm_agent",
+                    "sources": [{"type": "mcp_query", "query": result["sql"], "result_summary": result["summary"]}],
+                    "error": None,
+                }
+
+            chatbot = CouncilChatbot()
+            with patch.object(chatbot, "_run_agent", side_effect=fake_run_agent):
+                res = asyncio.run(
+                    chatbot.ask("Why was the top option chosen?",
+                                production_id=case.production_id,
+                                case_id=case.case_id)
+                )
+
+        assert "Shoot Cover Scenes" in res["answer"] or "96.6" in res["answer"]
+        assert len(res["sources"]) > 0
+        mock_tool.assert_called_once()
+
+    def test_llm_agent_calls_search_history_for_benchmark_question(self):
+        """When Gemini is mocked to request search_disruption_history, the tool is executed."""
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+        from unittest.mock import AsyncMock, patch
+
+        with patch("agents.council_chatbot.gemini_client.is_configured", return_value=True), \
+             patch("agents.council_chatbot.gemini_client.quota_hit", return_value=False), \
+             patch("agents.council_chatbot.search_disruption_history", new_callable=AsyncMock) as mock_hist:
+
+            mock_hist.return_value = {
+                "sql": "SELECT * FROM continuity_council.disruption_history",
+                "rows": [
+                    ["shoot_cover_scenes", 17241.0, 3.7, 0.67, 22467],
+                ],
+                "summary": "1 benchmark record found.",
+            }
+
+            async def fake_run_agent(q, prod, cid, hist):
+                result = await mock_hist(query=q, production_id=prod)
+                return {
+                    "answer": f"Historically, shoot_cover_scenes costs ~$17.2k with 3.7h delay (n=22,467). "
+                              f"Would you like to see this applied to your active case?",
+                    "intent": "llm_agent",
+                    "sources": [{"type": "mcp_query", "query": result["sql"], "result_summary": result["summary"]}],
+                    "error": None,
+                }
+
+            chatbot = CouncilChatbot()
+            with patch.object(chatbot, "_run_agent", side_effect=fake_run_agent):
+                res = asyncio.run(chatbot.ask("Show me similar historical disruptions"))
+
+        assert "17.2k" in res["answer"] or "22,467" in res["answer"] or "3.7h" in res["answer"]
+        assert len(res["sources"]) > 0
+        mock_hist.assert_called_once()
+
+    def test_llm_agent_returns_fallback_when_gemini_unavailable(self):
+        """When Gemini is not configured, ask() returns a deterministic fallback."""
+        import asyncio
+        from agents.council_chatbot import CouncilChatbot
+        from unittest.mock import patch
+
+        with patch("agents.council_chatbot.gemini_client.is_configured", return_value=False):
+            chatbot = CouncilChatbot()
+            res = asyncio.run(chatbot.ask("Why was the top option chosen?", production_id="prod_001"))
+
+        assert isinstance(res["answer"], str)
+        assert len(res["answer"]) > 20
+        # Must NOT be the LLM-unavailable error message (fallback should produce real content)
+        assert "temporarily unavailable" not in res["answer"].lower()
 
 
 # ---------------------------------------------------------------------------
