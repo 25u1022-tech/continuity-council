@@ -76,12 +76,12 @@ When a production disruption hits (lead actor out, location lost, weather delay,
 ```
 
 **The Workflow Loop:**
-1. **Disruption Ingestion** $\rightarrow$ Producer reports disruption on active shoot day.
+1. **Natural-language Disruption Reporting** $\rightarrow$ Producer enters free-text incidents ("Sarah broke her wrist, can't shoot Tuesday"); calendar-aware entity and day resolution pre-fills structured form.
 2. **ADK Orchestration** $\rightarrow$ `Runner.run_async()` launches `SequentialAgent`.
 3. **Stage 1 (Generation)** $\rightarrow$ Deterministic formulation of viable recovery moves.
 4. **Stage 2 (Parallel Specialists)** $\rightarrow$ `ParallelAgent` evaluates ClickHouse MCP empirical benchmarks, narrative continuity DAGs, union/transit compliance, and option copy.
-5. **Stage 3 (Synthesis)** $\rightarrow$ Bottom-up rate cards calibrated with live weather & FX signals, scored via TRD formula, and summarized.
-6. **Producer Review** $\rightarrow$ Producer reviews grounded options and selects the optimal recovery plan.
+5. **Stage 3 (Synthesis)** $\rightarrow$ Bottom-up rate cards calibrated with live weather & FX signals, scored via TRD formula, with one-line natural-language explainability justifications citing ClickHouse evidence.
+6. **Producer Review** $\rightarrow$ Producer reviews grounded options with plain-English justifications and selects the optimal recovery plan.
 7. **Post-Approval Audit** $\rightarrow$ `Auditor` commits immutable audit ledger and schedule delta records to ClickHouse Cloud.
 
 ---

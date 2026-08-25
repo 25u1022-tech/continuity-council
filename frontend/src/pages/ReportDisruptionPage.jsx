@@ -9,11 +9,11 @@ import {
 } from "../components/ui/select";
 import { Skeleton } from "../components/ui/skeleton";
 import { Pill } from "../components/badges";
-import { getHealth, getProduction, getImpactPreview, reportDisruption, DISRUPTION_TYPES } from "../lib/api";
+import { getHealth, getProduction, getImpactPreview, reportDisruption, parseNLDisruption, DISRUPTION_TYPES } from "../lib/api";
 import { useProduction } from "../context/ProductionContext";
 import { useTheme } from "../context/ThemeContext";
 import { dayToDate, dateToDay, dayLabel, getShootDateRange } from "../lib/days";
-import { Siren, Loader2, TriangleAlert } from "lucide-react";
+import { Siren, Loader2, TriangleAlert, Sparkles } from "lucide-react";
 
 const ACTOR_TYPES = ["lead_actor_unavailable", "supporting_actor_unavailable"];
 const LOCATION_TYPES = ["location_unavailable", "permit_issue"];
@@ -31,6 +31,10 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
   const [previewScenes, setPreviewScenes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
+  const [nlText, setNlText] = useState("");
+  const [nlParsing, setNlParsing] = useState(false);
+  const [nlResult, setNlResult] = useState(null);
+
   const [form, setForm] = useState({
     disruption_type: "lead_actor_unavailable",
     affected_day: "1",
@@ -39,6 +43,50 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
     severity: "high",
     notes: "",
   });
+
+  const handleParseNL = async () => {
+    if (!nlText.trim()) return;
+    setNlParsing(true);
+    try {
+      const res = await parseNLDisruption(nlText, selectedId);
+      setNlResult(res);
+
+      if (res && res.confidence !== "low") {
+        setForm((f) => {
+          const nextType = res.disruption_type || f.disruption_type;
+          let nextCast = f.affected_cast_id;
+          let nextLoc = f.affected_location_id;
+
+          if (res.affected_cast_id && bundle?.cast_members) {
+            const exists = bundle.cast_members.some((c) => c.cast_id === res.affected_cast_id);
+            if (exists) nextCast = res.affected_cast_id;
+          }
+          if (res.affected_location_id && bundle?.locations) {
+            const exists = bundle.locations.some((l) => l.location_id === res.affected_location_id);
+            if (exists) nextLoc = res.affected_location_id;
+          }
+
+          return {
+            ...f,
+            disruption_type: nextType,
+            affected_day: String(res.affected_day || f.affected_day),
+            severity: res.severity || f.severity,
+            affected_cast_id: nextCast,
+            affected_location_id: nextLoc,
+            notes: res.notes || nlText,
+          };
+        });
+        toast.success("Incident parsed — fields pre-filled");
+      } else {
+        toast.info("Could not extract full details — please verify fields below");
+      }
+    } catch (err) {
+      setNlResult({ confidence: "low", reasoning: "Parser unavailable" });
+      toast.error("Natural language parser unavailable — please fill form manually");
+    } finally {
+      setNlParsing(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedId) return;
@@ -181,6 +229,104 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
         </p>
       </div>
 
+      {/* Natural-Language Disruption Intake Card */}
+      <div className="cc-card p-6 md:p-7 border border-[var(--cc-border)] bg-[var(--cc-surface)] shadow-sm rounded-[14px]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--cc-text-primary)]/10 text-[var(--cc-text-primary)]">
+              <Sparkles size={15} />
+            </div>
+            <div>
+              <h2 className="text-[15px] font-semibold text-[var(--cc-text-primary)]">
+                Describe it in your own words
+              </h2>
+              <p className="text-[12.5px] text-[var(--cc-text-secondary)]">
+                Natural-language parser resolves entities, shoot days, and disruption types automatically.
+              </p>
+            </div>
+          </div>
+          {nlResult?.confidence && (
+            <div
+              data-testid="nl-confidence-chip"
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                nlResult.confidence === "high"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                  : nlResult.confidence === "medium"
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                  : "bg-[var(--cc-surface-hover)] text-[var(--cc-text-secondary)] border border-[var(--cc-border)]"
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  nlResult.confidence === "high"
+                    ? "bg-emerald-500"
+                    : nlResult.confidence === "medium"
+                    ? "bg-amber-500"
+                    : "bg-[var(--cc-text-tertiary)]"
+                }`}
+              />
+              {nlResult.confidence === "high"
+                ? "High confidence"
+                : nlResult.confidence === "medium"
+                ? "Medium confidence"
+                : "Manual review"}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <Textarea
+            data-testid="nl-description-input"
+            value={nlText}
+            onChange={(e) => setNlText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleParseNL();
+              }
+            }}
+            placeholder="e.g. Sarah broke her wrist, can't shoot Tuesday"
+            rows={2}
+            className="rounded-[10px] border-[var(--cc-border)] bg-[var(--cc-surface-hover)] text-[14px] text-[var(--cc-text-primary)] placeholder:text-[var(--cc-text-tertiary)] focus:border-[var(--cc-text-primary)]"
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[12px] text-[var(--cc-text-secondary)]">
+              {nlResult && nlResult.confidence !== "low" ? (
+                <span className="text-[var(--cc-text-secondary)]">
+                  Edited? You can adjust anything below before submitting.
+                </span>
+              ) : nlResult?.confidence === "low" ? (
+                <span className="text-amber-600 dark:text-amber-400">
+                  Could not extract all details automatically — please select fields below manually.
+                </span>
+              ) : (
+                <span className="text-[var(--cc-text-tertiary)]">
+                  Try: &quot;Sarah broke her wrist, can&apos;t shoot Tuesday&quot; or &quot;The harbor permit got revoked&quot;
+                </span>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              data-testid="nl-parse-btn"
+              onClick={handleParseNL}
+              disabled={nlParsing || !nlText.trim()}
+              className="h-8 rounded-[8px] px-3.5 text-[12.5px] font-medium"
+            >
+              {nlParsing ? (
+                <>
+                  <Loader2 size={13} className="mr-1.5 animate-spin" />
+                  Parsing...
+                </>
+              ) : (
+                "Parse"
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-12 gap-6">
         {/* Form Card */}
         <div className="cc-card col-span-12 p-6 md:p-8 lg:col-span-7">
@@ -192,9 +338,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] shadow-lg rounded-[12px] p-1">
-                  {DISRUPTION_TYPES.filter((t) =>
-                    ["lead_actor_unavailable", "location_unavailable"].includes(t.value)
-                  ).map((t) => (
+                  {DISRUPTION_TYPES.map((t) => (
                     <SelectItem key={t.value} value={t.value} data-testid={`disruption-type-${t.value}`}>
                       {t.label}
                     </SelectItem>

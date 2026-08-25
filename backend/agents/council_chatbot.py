@@ -272,10 +272,10 @@ def sanitize_text(text: str) -> str:
     if not text:
         return ""
 
-    # Fix duplicated numbering like "1. 1.", "1. 1. ", "2. 2.", "1. 1)", "1.  1. "
-    text = re.sub(r'(?m)^(\s*)(\d+)[\.\)]\s*(\d+)[\.\)]\s*', r'\1\2. ', text)
-    text = re.sub(r'\b(\d+)[\.\)]\s+(\d+)[\.\)]\s+', r'\1. ', text)
-    text = re.sub(r'\b(\d+)\.\s*(\d+)\.\s+', r'\1. ', text)
+    # Fix duplicated numbering like "1. 1.", "1. 1. ", "2. 2.", "1. 1)", "1.  1. " (using backreference)
+    text = re.sub(r'(?m)^(\s*)(\d+)[\.\)]\s+\2[\.\)]\s*', r'\1\2. ', text)
+    text = re.sub(r'\b(\d+)[\.\)]\s+\1[\.\)]\s+', r'\1. ', text)
+    text = re.sub(r'\b(\d+)\.\s*\1\.\s+', r'\1. ', text)
 
     # Round unrounded floats with 3+ decimal places
     def round_float_match(match: re.Match) -> str:
@@ -656,18 +656,15 @@ class CouncilChatbot:
                     context_blocks.append(f"CLICKHOUSE HISTORICAL EVIDENCE:\n{json.dumps(history_result, indent=2)}")
 
                 prompt = (
-                    f"{SYSTEM_PROMPT}\n\n"
-                    f"USER QUESTION: {clean_q}\n\n"
-                    f"CONTEXT & CLICKHOUSE DATA:\n"
+                    f"You are the Continuity Council's friendly assistant.\n\n"
+                    f"CONTEXT & DATA FROM CLICKHOUSE & CASE INVESTIGATION:\n"
                     f"{'---'.join(context_blocks) if context_blocks else 'General Continuity Council film production workflow.'}\n\n"
-                    f"STRICT INSTRUCTIONS:\n"
-                    f"- Summarize in plain language.\n"
-                    f"- Maximum 3 bullet points. Each bullet MUST follow this format:\n"
-                    f"  • [strategy name] — ~$XX.Xk overrun, ~X.Xh delay, XX% satisfaction (n=...)\n"
-                    f"- Never output raw unrounded floats (round hours to 1 decimal like 6.2h, money to $X,XXX or ~$XX.Xk, satisfaction to integer %).\n"
-                    f"- Never duplicate numbers (no '1. 1.').\n"
-                    f"- Follow the bullets with exactly one plain-English summary sentence.\n"
-                    f"- End with a helpful follow-up question or next-step suggestion."
+                    f"USER QUESTION: {clean_q}\n\n"
+                    f"Answer the user's question directly, clearly, and concisely based on the context above.\n"
+                    f"- Mention specific option names (e.g. Option #1: Shoot Cover Scenes), rank, score, and historical sample size.\n"
+                    f"- If listing strategies, format up to 3 bullets: • [strategy name] — ~$XX.Xk overrun, ~X.Xh delay, XX% satisfaction (n=...)\n"
+                    f"- Never output raw unrounded floats (round hours to 1 decimal like 6.2h, money to $X,XXX or ~$XX.Xk).\n"
+                    f"- End with a friendly one-sentence summary and a helpful follow-up suggestion."
                 )
 
                 raw_answer = await gemini_client.generate_text(prompt, timeout=6.0, temperature=0.2)

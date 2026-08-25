@@ -28,6 +28,8 @@ from models import (  # noqa: E402
     CreateProductionRequest,
     DisruptionReport,
     DisruptionType,
+    ParseNLDisruptionRequest,
+    ParseNLDisruptionResponse,
     new_case,
     short_id,
 )
@@ -37,6 +39,7 @@ from services import (  # noqa: E402
     geo_service,
     import_service,
     mcp_client,
+    nl_parser,
     scene_generator,
 )
 from services.geo_service import geocode_location, resolve_geo_economics  # noqa: E402
@@ -377,6 +380,30 @@ async def disruption_impact_preview(
         bundle, disruption_type, affected_day, affected_cast_id, affected_location_id
     )
     return {"production_id": production_id, "affected_day": affected_day, "scenes": scenes}
+
+
+@api.post("/disruptions/parse-nl", response_model=ParseNLDisruptionResponse)
+async def parse_nl_disruption(req: ParseNLDisruptionRequest):
+    """Parse natural-language incident description into structured disruption fields."""
+    try:
+        res = await nl_parser.parse_disruption(req.description, req.production_id)
+        return res
+    except Exception as exc:
+        logger.warning("NL disruption parse failed: %s", exc)
+        return {
+            "confidence": "low",
+            "disruption_type": "lead_actor_unavailable",
+            "severity": "medium",
+            "affected_day": 1,
+            "affected_date": "",
+            "affected_cast_id": "",
+            "affected_cast_name": "",
+            "affected_location_id": "",
+            "affected_location_name": "",
+            "notes": req.description,
+            "scene_ids": [],
+            "reasoning": "Could not parse description",
+        }
 
 
 @api.post("/disruptions", status_code=201)

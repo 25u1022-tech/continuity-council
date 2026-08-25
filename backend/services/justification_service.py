@@ -100,6 +100,9 @@ async def _generate_single_justification(opt: Any, evidence: Optional[Union[Dict
         text = await gemini_client.generate_text(prompt, timeout=1.4, temperature=0.2)
         if text:
             cleaned = text.strip().strip('"').strip("'").replace("\n", " ")
+            import re
+            cleaned = re.sub(r"(\d+\.\d{2,})h", lambda m: f"{float(m.group(1)):.1f}h", cleaned)
+            cleaned = re.sub(r"\$(\d+\.\d{2,})k", lambda m: f"${float(m.group(1)):.1f}k", cleaned)
             if len(cleaned) > 10 and not cleaned.lower().startswith("error"):
                 return cleaned
     except Exception as exc:  # noqa: BLE001

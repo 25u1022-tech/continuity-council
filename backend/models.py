@@ -93,6 +93,26 @@ class ChatResponse(BaseModel):
     sources: List[ChatSource] = []
 
 
+class ParseNLDisruptionRequest(BaseModel):
+    description: str = Field(..., min_length=1, max_length=2000)
+    production_id: str = Field("prod_001", min_length=1, max_length=64)
+
+
+class ParseNLDisruptionResponse(BaseModel):
+    confidence: Literal["high", "medium", "low"] = "medium"
+    disruption_type: str = "lead_actor_unavailable"
+    severity: str = "medium"
+    affected_day: int = 1
+    affected_date: str = ""
+    affected_cast_id: str = ""
+    affected_cast_name: str = ""
+    affected_location_id: str = ""
+    affected_location_name: str = ""
+    notes: str = ""
+    scene_ids: List[str] = []
+    reasoning: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Production onboarding (create-your-own production)
 # ---------------------------------------------------------------------------

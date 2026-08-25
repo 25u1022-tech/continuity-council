@@ -75,6 +75,11 @@ export const getImpactPreview = (params) => {
 };
 export const reportDisruption = (payload) =>
   request("/disruptions", { method: "POST", body: payload });
+export const parseNLDisruption = (description, productionId = PRODUCTION_ID) =>
+  request("/disruptions/parse-nl", {
+    method: "POST",
+    body: { description, production_id: productionId },
+  });
 export const getCase = (caseId) => request(`/cases/${caseId}`);
 export const approveOption = (caseId, optionId, approvedBy = "producer") =>
   request(`/cases/${caseId}/approve`, {

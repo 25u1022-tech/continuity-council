@@ -1549,6 +1549,164 @@ class TestExplainabilityJustification:
             assert "11.8h delay" in opt.justification
 
 
+class TestNLDisruptionParser:
+    """Test suite for natural-language disruption parsing and day resolution."""
+
+    def test_day_resolution_weekdays_and_phrases(self):
+        from services.nl_parser import resolve_day_and_date
+
+        start_date = "2026-08-24"  # Monday
+
+        # Monday -> Day 1
+        d, dt = resolve_day_and_date("filming Monday morning", start_date)
+        assert d == 1
+        assert dt == "2026-08-24"
+
+        # Tuesday -> Day 2
+        d, dt = resolve_day_and_date("Sarah can't shoot Tuesday", start_date)
+        assert d == 2
+        assert dt == "2026-08-25"
+
+        # Thursday -> Day 4
+        d, dt = resolve_day_and_date("Storm rolling in Thursday", start_date)
+        assert d == 4
+        assert dt == "2026-08-27"
+
+        # Explicit Day N
+        d, dt = resolve_day_and_date("holding Day 12 schedule", start_date, total_shoot_days=30)
+        assert d == 12
+        assert dt == "2026-09-04"
+
+        # Relative tomorrow
+        d, dt = resolve_day_and_date("gear arrives tomorrow", start_date)
+        assert d == 2
+        assert dt == "2026-08-25"
+
+    def test_mock_gemini_5_disruption_descriptions(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from services.nl_parser import parse_disruption
+
+        mock_bundle = {
+            "production": {"start_date": "2026-08-24", "total_shoot_days": 30},
+            "cast_members": [
+                {"cast_id": "lead_001", "name": "Sarah Sterling", "role_type": "lead"},
+                {"cast_id": "supp_001", "name": "Dev Okafor", "role_type": "supporting"},
+            ],
+            "locations": [
+                {"location_id": "harbor_ext", "name": "Harbor Exterior", "location_type": "exterior"},
+                {"location_id": "stage_a", "name": "Stage A", "location_type": "interior"},
+            ],
+            "scenes": [
+                {"scene_id": "sc_001", "shoot_day": 2, "required_cast": ["lead_001"], "location_id": "stage_a"},
+                {"scene_id": "sc_002", "shoot_day": 4, "required_cast": ["supp_001"], "location_id": "harbor_ext"},
+            ],
+        }
+
+        with patch("services.clickhouse_client.fetch_production_bundle", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_bundle
+
+            # 1. Sarah broke her wrist
+            with patch("services.gemini_client.generate_json", new_callable=AsyncMock) as mock_json:
+                mock_json.return_value = {
+                    "disruption_type": "lead_actor_unavailable",
+                    "severity": "high",
+                    "entity_mention": "Sarah",
+                    "day_mention": "Tuesday",
+                    "reasoning": "Sarah broke her wrist and cannot film on Tuesday.",
+                }
+                res1 = asyncio.run(parse_disruption("Sarah broke her wrist, can't shoot Tuesday", "prod_001"))
+                assert res1["disruption_type"] == "lead_actor_unavailable"
+                assert res1["affected_day"] == 2
+                assert res1["affected_date"] == "2026-08-25"
+                assert res1["affected_cast_id"] == "lead_001"
+                assert res1["confidence"] == "high"
+
+            # 2. Harbor permit revoked
+            with patch("services.gemini_client.generate_json", new_callable=AsyncMock) as mock_json:
+                mock_json.return_value = {
+                    "disruption_type": "permit_issue",
+                    "severity": "high",
+                    "entity_mention": "harbor",
+                    "day_mention": "Day 1",
+                    "reasoning": "Harbor permit was revoked by authorities.",
+                }
+                res2 = asyncio.run(parse_disruption("The harbor permit got revoked", "prod_001"))
+                assert res2["disruption_type"] in ("permit_issue", "location_unavailable")
+                assert res2["affected_location_id"] == "harbor_ext"
+                assert res2["confidence"] in ("high", "medium")
+
+            # 3. Storm rolling in Thursday
+            with patch("services.gemini_client.generate_json", new_callable=AsyncMock) as mock_json:
+                mock_json.return_value = {
+                    "disruption_type": "weather_delay",
+                    "severity": "medium",
+                    "entity_mention": "",
+                    "day_mention": "Thursday",
+                    "reasoning": "Storm forecast for Thursday.",
+                }
+                res3 = asyncio.run(parse_disruption("Storm's rolling in Thursday", "prod_001"))
+                assert res3["disruption_type"] == "weather_delay"
+                assert res3["affected_day"] == 4
+                assert res3["affected_date"] == "2026-08-27"
+
+            # 4. Equipment failure
+            with patch("services.gemini_client.generate_json", new_callable=AsyncMock) as mock_json:
+                mock_json.return_value = {
+                    "disruption_type": "equipment_failure",
+                    "severity": "high",
+                    "entity_mention": "camera",
+                    "day_mention": "tomorrow",
+                    "reasoning": "Main camera sensor is fried.",
+                }
+                res4 = asyncio.run(parse_disruption("Main camera sensor fried, replacement arrives tomorrow", "prod_001"))
+                assert res4["disruption_type"] == "equipment_failure"
+                assert res4["affected_day"] == 2
+
+            # 5. Supporting actor Dev
+            with patch("services.gemini_client.generate_json", new_callable=AsyncMock) as mock_json:
+                mock_json.return_value = {
+                    "disruption_type": "supporting_actor_unavailable",
+                    "severity": "medium",
+                    "entity_mention": "Dev",
+                    "day_mention": "Day 3",
+                    "reasoning": "Dev is delayed in transit.",
+                }
+                res5 = asyncio.run(parse_disruption("Dev is stuck in transit, holding day 3 scenes", "prod_001"))
+                assert res5["disruption_type"] == "supporting_actor_unavailable"
+                assert res5["affected_day"] == 3
+                assert res5["affected_cast_id"] == "supp_001"
+
+    def test_gemini_timeout_fallback_to_heuristic(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from services.nl_parser import parse_disruption
+
+        mock_bundle = {
+            "production": {"start_date": "2026-08-24", "total_shoot_days": 30},
+            "cast_members": [{"cast_id": "lead_001", "name": "Sarah Sterling", "role_type": "lead"}],
+            "locations": [],
+            "scenes": [],
+        }
+
+        with patch("services.clickhouse_client.fetch_production_bundle", new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_bundle
+            with patch("services.gemini_client.generate_json", side_effect=asyncio.TimeoutError("Timeout")):
+                res = asyncio.run(parse_disruption("Sarah broke her wrist, can't shoot Tuesday", "prod_001"))
+                assert res["disruption_type"] == "lead_actor_unavailable"
+                assert res["affected_day"] == 2
+                assert res["affected_cast_id"] == "lead_001"
+                assert res["confidence"] in ("high", "medium")
+
+    def test_empty_description_handling(self):
+        import asyncio
+        from services.nl_parser import parse_disruption
+
+        res = asyncio.run(parse_disruption("", "prod_001"))
+        assert res["confidence"] == "low"
+        assert res["parsed"] is None
+
+
 
 
 
