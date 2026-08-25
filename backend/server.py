@@ -566,6 +566,125 @@ async def approve_option(
     }
 
 
+@api.get("/cases/{case_id}/report.html")
+async def get_case_html_report(
+    case_id: str = Path(..., pattern=CASE_ID_PATTERN, description="Case ID"),
+):
+    """Export standalone executive recovery report as clean printable HTML."""
+    from fastapi.responses import HTMLResponse
+
+    case = case_store.get(case_id)
+    if case is None:
+        raise HTTPException(404, f"Case {case_id} not found")
+
+    disruption = case.disruption
+    options_rows = ""
+    for opt in case.options:
+        is_rec = getattr(opt, "recommended", False) or opt.rank == 1
+        rank_badge = (
+            f"<span style='background:#10b981;color:#fff;padding:2px 8px;border-radius:12px;font-weight:600;'>#{opt.rank} REC</span>"
+            if is_rec
+            else f"<span style='background:#64748b;color:#fff;padding:2px 8px;border-radius:12px;'>#{opt.rank}</span>"
+        )
+        options_rows += f"""
+        <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:12px 16px;">{rank_badge}</td>
+            <td style="padding:12px 16px;font-weight:600;">{opt.name}<br><small style="color:#64748b;font-weight:normal;">{opt.description}</small></td>
+            <td style="padding:12px 16px;font-family:monospace;font-weight:600;">${opt.estimated_cost_usd:,.0f}</td>
+            <td style="padding:12px 16px;font-family:monospace;">{opt.estimated_delay_hours:.1f}h</td>
+            <td style="padding:12px 16px;font-family:monospace;font-weight:600;">{opt.score:.2f}</td>
+            <td style="padding:12px 16px;color:#475569;font-size:13px;"><em>{opt.justification or 'Grounded via ClickHouse benchmark'}</em></td>
+        </tr>
+        """
+
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuity Council — Executive Recovery Report ({case_id})</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 32px 20px; }}
+        .container {{ max-width: 900px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+        h1 {{ font-size: 24px; margin: 0 0 4px 0; color: #f8fafc; }}
+        .meta {{ color: #94a3b8; font-size: 13px; margin-bottom: 24px; }}
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }}
+        .card {{ background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; }}
+        .card-label {{ font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 0.5px; }}
+        .card-val {{ font-size: 16px; font-weight: 600; color: #f8fafc; margin-top: 4px; }}
+        table {{ width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; margin-top: 16px; }}
+        th {{ background: #0f172a; padding: 12px 16px; font-size: 12px; text-transform: uppercase; color: #94a3b8; border-bottom: 1px solid #334155; }}
+        .rationale {{ background: #0f172a; border-left: 4px solid #10b981; border-radius: 8px; padding: 16px; margin: 24px 0; font-size: 14px; line-height: 1.6; }}
+        .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #334155; text-align: center; font-size: 12px; color: #64748b; }}
+        @media print {{ body {{ background: #fff; color: #000; padding: 0; }} .container {{ border: none; box-shadow: none; padding: 0; }} }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+                <h1>Continuity Council — Executive Recovery Report</h1>
+                <div class="meta">Case ID: <code>{case_id}</code> · Production: <code>{disruption.production_id}</code> · Status: <strong>{case.status.upper()}</strong></div>
+            </div>
+            <div style="text-align:right;">
+                <span style="display:inline-block; padding:4px 12px; background:#10b981; color:#fff; font-size:11px; font-weight:600; border-radius:20px;">MCP GROUNDED</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-label">Disruption Type</div>
+                <div class="card-val">{disruption.disruption_type.replace('_', ' ').title()}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Affected Shoot Day</div>
+                <div class="card-val">Day {disruption.affected_day}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Severity Level</div>
+                <div class="card-val">{disruption.severity.upper()}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Options Ranked</div>
+                <div class="card-val">{len(case.options)} options</div>
+            </div>
+        </div>
+
+        <div class="rationale">
+            <strong>Executive Briefing & Synthesis:</strong><br>
+            {getattr(case, 'recommendation_rationale', '') or getattr(case, 'evidence_narrative', '') or 'Council specialists evaluated ClickHouse empirical history, union compliance boundaries, narrative continuity constraints, and live macroeconomic rate cards to rank viable recovery paths.'}
+        </div>
+
+        <h3 style="font-size:16px; margin: 24px 0 8px 0;">Calibrated Recovery Options</h3>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Option / Strategy</th>
+                        <th>Cost (USD)</th>
+                        <th>Delay</th>
+                        <th>Score</th>
+                        <th>Justification</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {options_rows if options_rows else '<tr><td colspan="6" style="padding:24px; text-align:center; color:#64748b;">No options available.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            Generated by Continuity Council · Powered by ClickHouse Cloud, FastMCP & Google Gemini ADK
+        </div>
+    </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, status_code=200)
+
+
+
 @api.get("/activity")
 async def recent_activity(limit: int = 10):
     """Recent ClickHouse / MCP activity events for the Live MCP Ticker."""
