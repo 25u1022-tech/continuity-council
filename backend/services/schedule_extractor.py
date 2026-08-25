@@ -366,7 +366,7 @@ async def process_schedule_pdf_async(job_id: str, pdf_bytes: bytes) -> None:
     # 3. Check if extraction succeeded
     if not extracted_raw or not isinstance(extracted_raw, dict) or not (extracted_raw.get("scenes") or extracted_raw.get("shoot_days")):
         job["status"] = "failed"
-        job["error"] = "We couldn't read this schedule — you can still enter it manually or via CSV."
+        job["error"] = "We couldn't read this schedule. You can still enter it manually or via CSV."
         logger.warning("Schedule extraction failed for job %s", job_id)
         return
 

@@ -52,7 +52,7 @@ function AppContent() {
             role="status"
             className="border-b border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-6 py-2.5 text-center text-[13px] text-[var(--cc-text-primary)]"
           >
-            Starting production services — the first visit can take a few seconds.
+            Starting production services: the first visit can take a few seconds.
           </div>
         )}
         <Shell activeCase={activeCase}>

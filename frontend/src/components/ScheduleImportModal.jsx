@@ -105,7 +105,7 @@ export const ScheduleImportModal = ({
             setStage("ready");
           } else if (job.status === "failed") {
             clearInterval(pollTimerRef.current);
-            setErrorMsg(job.error || "We couldn't read this schedule — you can still enter it manually or via CSV.");
+            setErrorMsg(job.error || "We couldn't read this schedule. You can still enter it manually or via CSV.");
             setStage("failed");
           }
         } catch (err) {
@@ -377,7 +377,7 @@ export const ScheduleImportModal = ({
                     We couldn't read this schedule
                   </h5>
                   <p className="mt-1 text-[13px] text-[var(--cc-text-secondary)]">
-                    {errorMsg || "We couldn't read this schedule — you can still enter it manually or via CSV."}
+                    {errorMsg || "We couldn't read this schedule. You can still enter it manually or via CSV."}
                   </p>
                 </div>
               </div>

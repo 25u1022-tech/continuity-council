@@ -159,7 +159,7 @@ async def polish_descriptions(case: CaseState, options: List[RecoveryOption], bu
             f"Disruption: {case.disruption.disruption_type} on Day {case.disruption.affected_day}. "
             "Rewrite each option description in ONE crisp sentence. "
             "Return JSON array [{\"option_id\": str, \"description\": str}] for: "
-            + "; ".join(f"{o.option_id}: {o.name} — {o.description}" for o in options)
+            + "; ".join(f"{o.option_id}: {o.name}: {o.description}" for o in options)
         )
         data = await gemini_client.generate_json(prompt, timeout=5.0, max_tokens=256)
         if isinstance(data, list):

@@ -76,13 +76,13 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
             notes: res.notes || nlText,
           };
         });
-        toast.success("Incident parsed — fields pre-filled");
+        toast.success("Incident parsed: fields pre-filled");
       } else {
-        toast.info("Could not extract full details — please verify fields below");
+        toast.info("Could not extract full details. Please verify fields below");
       }
     } catch (err) {
       setNlResult({ confidence: "low", reasoning: "Parser unavailable" });
-      toast.error("Natural language parser unavailable — please fill form manually");
+      toast.error("Natural language parser unavailable. Please fill form manually");
     } finally {
       setNlParsing(false);
     }
@@ -179,7 +179,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
       };
       const res = await reportDisruption(payload);
       setActiveCaseId(res.case_id);
-      toast.success(`Case ${res.case_id} created — council dispatched`);
+      toast.success(`Case ${res.case_id} created: council dispatched`);
       navigate("/investigation");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to report disruption");
@@ -225,7 +225,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
           Report disruption
         </h1>
         <p className="mt-1.5 text-[14px] text-[var(--cc-text-secondary)]">
-          File the incident — the council of six agents investigates immediately.
+          File the incident. The council of six agents investigates immediately.
         </p>
       </div>
 
@@ -298,7 +298,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
                 </span>
               ) : nlResult?.confidence === "low" ? (
                 <span className="text-amber-600 dark:text-amber-400">
-                  Could not extract all details automatically — please select fields below manually.
+                  Could not extract all details automatically. Please select fields below manually.
                 </span>
               ) : (
                 <span className="text-[var(--cc-text-tertiary)]">
@@ -396,7 +396,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
                   <SelectContent className="border border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] shadow-lg rounded-[12px] p-1">
                     {(bundle?.cast_members || []).map((c) => (
                       <SelectItem key={c.cast_id} value={c.cast_id}>
-                        {c.name} ({c.role_type}) — ${c.day_rate_usd ? c.day_rate_usd.toLocaleString() : "1,500"}/day
+                        {c.name} ({c.role_type}) : ${c.day_rate_usd ? c.day_rate_usd.toLocaleString() : "1,500"}/day
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -414,7 +414,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
                   <SelectContent className="border border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] shadow-lg rounded-[12px] p-1">
                     {(bundle?.locations || []).map((l) => (
                       <SelectItem key={l.location_id} value={l.location_id}>
-                        {l.name} ({l.location_type}) — {l.currency_code || "USD"} ${(l.daily_fee_usd || 5000).toLocaleString()}/day
+                        {l.name} ({l.location_type}) : {l.currency_code || "USD"} ${(l.daily_fee_usd || 5000).toLocaleString()}/day
                       </SelectItem>
                     ))}
                   </SelectContent>

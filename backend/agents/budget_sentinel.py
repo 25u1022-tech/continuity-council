@@ -445,13 +445,13 @@ async def calibrate_option_economics(
         w_res, fx_res = await asyncio.gather(w_task, fx_task)
 
         weather_risk_score = w_res["risk_score"]
-        weather_summary = f"{w_res['rain_risk_pct']}% historical rain risk — {w_res['source']}"
+        weather_summary = f"{w_res['rain_risk_pct']}% historical rain risk: {w_res['source']}"
         opt.weather_risk = weather_risk_score
         opt.weather_summary = weather_summary
 
         if loc_curr != "USD":
             fx_applied = fx_res["rate"]
-            fx_summary = f"Applied {fx_applied:.2f} {loc_curr}/USD — {fx_res['source']}"
+            fx_summary = f"Applied {fx_applied:.2f} {loc_curr}/USD: {fx_res['source']}"
             opt.fx_summary = fx_summary
 
         # Add transparent Geo Adjustment breakdown line

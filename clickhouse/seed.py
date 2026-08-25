@@ -135,7 +135,7 @@ client.insert(
 # --- Locations Catalog (with real coordinates, daily fee, and currency) ---
 locations_data = {
     "prod_001": [
-        ("stage_a", "Stage A — Interrogation Set", "stage", 120, 8000, 34.0522, -118.2437, "USD", "Sound stage, fully lit"),
+        ("stage_a", "Stage A: Interrogation Set", "stage", 120, 8000, 34.0522, -118.2437, "USD", "Sound stage, fully lit"),
         ("loft_interior", "Downtown Loft Interior", "interior", 40, 3500, 34.0407, -118.2468, "USD", "Practical location, limited window"),
         ("harbor_exterior", "Harbor Pier 7 Exterior", "exterior", 200, 2500, 33.7405, -118.2720, "USD", "Permit covers Day 1-2 only"),
     ],
@@ -154,7 +154,7 @@ locations_data = {
         ("loc_p2_deep_desert_basin", "Deep Basin Dune Sea", "exterior", 300, 15000, 23.1100, 53.7500, "AED", "Extreme remote location, sandstorm protocol"),
     ],
     "prod_003": [
-        ("loc_p3_studio_backlot", "Paramount Lot A — 1940s Street", "exterior", 250, 12000, 51.5283, -0.1338, "GBP", "Period cobblestone, vintage vehicle access"),
+        ("loc_p3_studio_backlot", "Paramount Lot A: 1940s Street", "exterior", 250, 12000, 51.5283, -0.1338, "GBP", "Period cobblestone, vintage vehicle access"),
         ("loc_p3_projection_booth", "Palace Cinema Projection Booth", "interior", 30, 3000, 51.5115, -0.1305, "GBP", "Confined vintage carbon arc projection room"),
         ("loc_p3_grand_ballroom", "Biltmore Grand Ballroom", "interior", 300, 15000, 51.5074, -0.1432, "GBP", "Historic landmark, no open flame permitted"),
         ("loc_p3_directors_mansion", "Spanish Revival Estate", "interior", 100, 9000, 51.4988, -0.1749, "GBP", "Private estate, sound restrictions after 9 PM"),
@@ -408,7 +408,7 @@ all_loc_avail = []
 for lid, _, _, _, _, _, _, _, _ in locations_data["prod_001"]:
     for day in range(1, 4):
         avail = 0 if (lid == "harbor_exterior" and day == 3) else 1
-        note = "Permit expired — pier closed Day 3" if not avail else ""
+        note = "Permit expired: pier closed Day 3" if not avail else ""
         all_loc_avail.append(["prod_001", lid, day, avail, note, NOW])
 
 for pid, total_days in [("prod_002", 160), ("prod_003", 66), ("prod_004", 18), ("prod_005", 15), ("prod_006", 20)]:

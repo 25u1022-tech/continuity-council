@@ -88,9 +88,9 @@ def validate_compliance(
                         f"(physically impossible in shoot window)."
                     )
                     hard_fail = True
-                    option.transit_summary = f"{dist:.0f}-mile crew transit (violates 100mi max) — OpenStreetMap"
+                    option.transit_summary = f"{dist:.0f}-mile crew transit (violates 100mi max): OpenStreetMap"
                 elif dist > 0.0 and not option.transit_summary:
-                    option.transit_summary = f"{dist:.0f}-mile crew transit — OpenStreetMap"
+                    option.transit_summary = f"{dist:.0f}-mile crew transit: OpenStreetMap"
 
     # 2) Location availability on new days
     for s in projected.values():
@@ -102,7 +102,7 @@ def validate_compliance(
         ):
             loc_label = loc_names.get(s["location_id"], s["location_id"])
             warnings.append(
-                f"{loc_label} is unavailable on Day {d.affected_day} — blocks {s['scene_id']}."
+                f"{loc_label} is unavailable on Day {d.affected_day}: blocks {s['scene_id']}."
             )
             hard_fail = True
         avail, note = loc_avail.get((s["location_id"], s["shoot_day"]), (True, ""))
@@ -110,7 +110,7 @@ def validate_compliance(
             loc_label = loc_names.get(s["location_id"], s["location_id"])
             suffix = f" ({note})" if note else ""
             warnings.append(
-                f"{loc_label} is not available on Day {s['shoot_day']} — blocks {s['scene_id']}{suffix}."
+                f"{loc_label} is not available on Day {s['shoot_day']}: blocks {s['scene_id']}{suffix}."
             )
             hard_fail = True
 
@@ -124,7 +124,7 @@ def validate_compliance(
             live_blocked = (cid, s["shoot_day"]) in unavailable_cast
             if not base_available or live_blocked:
                 warnings.append(
-                    f"{cast_names.get(cid, cid)} unavailable on Day {s['shoot_day']} — blocks {s['scene_id']}."
+                    f"{cast_names.get(cid, cid)} unavailable on Day {s['shoot_day']}: blocks {s['scene_id']}."
                 )
                 hard_fail = True
 
@@ -145,7 +145,7 @@ def validate_compliance(
     for day, count in sorted(per_day.items()):
         if count > MAX_SCENES_PER_DAY:
             warnings.append(
-                f"Day {day} would carry {count} scenes (>{MAX_SCENES_PER_DAY}) — likely crew overtime."
+                f"Day {day} would carry {count} scenes (>{MAX_SCENES_PER_DAY}): likely crew overtime."
             )
 
     # Risk score: hard fails dominate; soft warnings accumulate
@@ -185,7 +185,7 @@ async def validate_compliance_rules_tool(
     return {
         "invalid_count": invalid_count,
         "valid_count": len(option_models) - invalid_count,
-        "summary": f"Validated {len(option_models)} options — {invalid_count} blocked by hard constraints",
+        "summary": f"Validated {len(option_models)} options: {invalid_count} blocked by hard constraints",
         "evaluated_options": [o.model_dump() for o in option_models],
     }
 
@@ -220,4 +220,4 @@ async def run(case: CaseState, options: List[RecoveryOption], bundle: Dict[str, 
         option.compliance_risk_score = risk
         if not valid:
             invalid += 1
-    return f"Validated {len(options)} options — {invalid} blocked by hard constraints"
+    return f"Validated {len(options)} options: {invalid} blocked by hard constraints"

@@ -20,7 +20,7 @@ const sevTone = {
 };
 
 const fmtDate = (iso) => {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
@@ -61,7 +61,7 @@ export const EvidenceDrilldown = ({ open, onOpenChange, strategy, disruptionType
           <div className="flex items-center gap-2.5">
             <Database size={16} strokeWidth={1.75} className="text-[var(--cc-text-primary)]" />
             <DialogTitle className="font-display text-[17px] font-semibold tracking-tight text-[var(--cc-text-primary)]">
-              {sentenceCase(strategy)} — raw evidence rows
+              {sentenceCase(strategy)}: raw evidence rows
             </DialogTitle>
           </div>
           <DialogDescription className="text-[13px] text-[var(--cc-text-secondary)]">

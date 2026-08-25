@@ -75,7 +75,7 @@ export const SeverityBadge = ({ severity }) => (
     tone={SEVERITY_TONE[severity] || "yellow"}
     testId={`severity-badge-${severity}`}
   >
-    {severity ? severity.charAt(0).toUpperCase() + severity.slice(1) : "—"}
+    {severity ? severity.charAt(0).toUpperCase() + severity.slice(1) : "-"}
   </Pill>
 );
 

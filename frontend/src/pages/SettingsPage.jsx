@@ -245,15 +245,15 @@ export default function SettingsPage() {
               onChange={(e) => saveSetting("cc_base_currency", e.target.value, setBaseCurrency)}
               className="w-full h-10 rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-3 text-[13px] text-[var(--cc-text-primary)] focus:outline-none focus:border-[var(--cc-text-primary)] font-mono"
             >
-              <option value="USD">USD ($) — United States Dollar</option>
-              <option value="EUR">EUR (€) — Euro</option>
-              <option value="GBP">GBP (£) — British Pound</option>
-              <option value="INR">INR (₹) — Indian Rupee</option>
-              <option value="CAD">CAD (C$) — Canadian Dollar</option>
-              <option value="AUD">AUD (A$) — Australian Dollar</option>
-              <option value="BRL">BRL (R$) — Brazilian Real</option>
-              <option value="JPY">JPY (¥) — Japanese Yen</option>
-              <option value="AED">AED (د.إ) — UAE Dirham</option>
+              <option value="USD">USD ($) - United States Dollar</option>
+              <option value="EUR">EUR (€) - Euro</option>
+              <option value="GBP">GBP (£) - British Pound</option>
+              <option value="INR">INR (₹) - Indian Rupee</option>
+              <option value="CAD">CAD (C$) - Canadian Dollar</option>
+              <option value="AUD">AUD (A$) - Australian Dollar</option>
+              <option value="BRL">BRL (R$) - Brazilian Real</option>
+              <option value="JPY">JPY (¥) - Japanese Yen</option>
+              <option value="AED">AED (د.إ) - UAE Dirham</option>
             </select>
           </div>
         </div>

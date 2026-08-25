@@ -33,7 +33,7 @@ SYSTEM_PROMPT = (
 )
 
 GREETING_RESPONSE = (
-    "Hi there! I'm your council assistant — I can walk you through reporting a disruption, "
+    "Hi there! I'm your council assistant. I can walk you through reporting a disruption, "
     "explain any recommendation, or answer anything else on your mind. "
     "What can I help you with today?"
 )
@@ -140,7 +140,7 @@ HELP_KB: Dict[str, Dict[str, Any]] = {
         "answer": (
             "To approve a recovery option:\n\n"
             "1. Go to the **Recovery Options** screen from the sidebar.\n"
-            "2. Review the ranked strategy cards — the top-ranked option is highlighted as recommended.\n"
+            "2. Review the ranked strategy cards. The top-ranked option is highlighted as recommended.\n"
             "3. Click **Approve Option** on your preferred strategy.\n\n"
             "The **Auditor agent** will then write an immutable record to the ClickHouse decision ledger with a SHA-256 audit hash.\n\n"
             "Would you like me to show the Decision Ledger or explain the scoring behind the top option?"
@@ -166,7 +166,7 @@ GENERAL_KB: Dict[str, str] = {
         "Would you like to explore the shoot schedule for your current production?"
     ),
     "continuity": (
-        "**Continuity** in film production ensures that all visual and narrative elements—costumes, makeup, props, lighting, actor appearance, and timeline logic—remain consistent from shot to shot and scene to scene.\n\n"
+        "**Continuity** in film production ensures that all visual and narrative elements (costumes, makeup, props, lighting, actor appearance, and timeline logic) remain consistent from shot to shot and scene to scene.\n\n"
         "Shall I show you how the Continuity Memory agent tracks prop and costume continuity for your scenes?"
     ),
     "gaffer": (
@@ -525,7 +525,7 @@ async def check_shoot_plan(
         lon = float(loc.get("longitude", 0) or 0)
 
         if loc_type == "interior":
-            weather_reports.append(f"• **{loc_name}** (Interior): **Protected (0% Weather Risk)** — indoor stage cover.")
+            weather_reports.append(f"• **{loc_name}** (Interior): **Protected (0% Weather Risk)**: indoor stage cover.")
         elif lat or lon:
             w = await weather_service.get_weather_risk(lat, lon, month=8)
             risk_score = int(w.get("risk_score", 13))
@@ -534,7 +534,7 @@ async def check_shoot_plan(
             summary = w.get("summary", "coastal baseline")
             risk_label = "Low" if risk_score < 20 else "Moderate" if risk_score < 50 else "High"
             weather_reports.append(
-                f"• **{loc_name}** ({loc_type.capitalize()}): **{risk_label} Risk ({risk_score}%)** — {rain_pct}% rain, {wind_pct}% wind ({summary})."
+                f"• **{loc_name}** ({loc_type.capitalize()}): **{risk_label} Risk ({risk_score}%)**: {rain_pct}% rain, {wind_pct}% wind ({summary})."
             )
             sources.append({
                 "type": "mcp_query",
@@ -546,9 +546,9 @@ async def check_shoot_plan(
 
     if not weather_reports:
         weather_reports = [
-            "• **Harbor Exterior** (Exterior): **Low Risk (13%)** — 8% rain probability, 25% wind gusts (coastal marine baseline).",
-            "• **Soundstage A** (Interior): **Protected (0% Weather Risk)** — indoor cover set available.",
-            "• **Loft Interior** (Interior): **Protected (0% Weather Risk)** — standard stage setup.",
+            "• **Harbor Exterior** (Exterior): **Low Risk (13%)**: 8% rain probability, 25% wind gusts (coastal marine baseline).",
+            "• **Soundstage A** (Interior): **Protected (0% Weather Risk)**: indoor cover set available.",
+            "• **Loft Interior** (Interior): **Protected (0% Weather Risk)**: standard stage setup.",
         ]
 
     case = case_store.get(case_id) if case_id else None
@@ -560,7 +560,7 @@ async def check_shoot_plan(
     case_status_line = ""
     if case and case.options:
         dt_label = case.disruption.disruption_type.replace("_", " ")
-        case_status_line = f"• **Active Investigation:** Day {case.disruption.affected_day} ({dt_label}) — {len(case.options)} recovery options ready for review."
+        case_status_line = f"• **Active Investigation:** Day {case.disruption.affected_day} ({dt_label}): {len(case.options)} recovery options ready for review."
 
     lines = [
         f"Here is the current shoot plan and weather risk assessment for **{title}** (`{production_id}`):",
@@ -618,9 +618,9 @@ def _generate_evidence_fallback(
         lines = [
             f"**Option {name} (Rank {rank})** was selected with a composite score of **{score_str}** based on ClickHouse evidence:",
             "",
-            f"• {strat} — {cost_str} overrun, {delay_str} delay, {sat} satisfaction (n={past_n:,})",
-            f"• budget sentinel — 70% rate-card calculation calibrated against historical data (n={past_n:,})",
-            f"• compliance check — zero SAG-AFTRA turnaround violations recorded across benchmarks (n={past_n:,})",
+            f"• {strat}: {cost_str} overrun, {delay_str} delay, {sat} satisfaction (n={past_n:,})",
+            f"• budget sentinel: 70% rate-card calculation calibrated against historical data (n={past_n:,})",
+            f"• compliance check: zero SAG-AFTRA turnaround violations recorded across benchmarks (n={past_n:,})",
             "",
             f"Option {name} delivers the lowest financial and schedule risk for your production.",
             "",
@@ -641,7 +641,7 @@ def _generate_evidence_fallback(
             delay = format_delay_h(r[2]) if len(r) > 2 else "~4.0h"
             sat = format_pct(r[3]) if len(r) > 3 else "85%"
             n_count = f"{r[4]:,}" if len(r) > 4 and isinstance(r[4], (int, float)) else "200+"
-            lines.append(f"• {strat} — {cost} overrun, {delay} delay, {sat} satisfaction (n={n_count})")
+            lines.append(f"• {strat}: {cost} overrun, {delay} delay, {sat} satisfaction (n={n_count})")
 
         lines.append("")
         lines.append("Across past disruptions, these benchmark strategies consistently minimize shoot delays while protecting budget limits.")
@@ -652,9 +652,9 @@ def _generate_evidence_fallback(
     # 3. General evidence explanation
     return (
         "The Continuity Council ranks recovery options using calibrated ClickHouse data:\n\n"
-        "• shoot cover scenes — ~$17.2k overrun, ~3.7h delay, 67% satisfaction (n=22,467)\n"
-        "• use stand in — ~$17.5k overrun, ~3.2h delay, 64% satisfaction (n=5,586)\n"
-        "• swap locations — ~$27.6k overrun, ~5.2h delay, 69% satisfaction (n=12,221)\n\n"
+        "• shoot cover scenes: ~$17.2k overrun, ~3.7h delay, 67% satisfaction (n=22,467)\n"
+        "• use stand in: ~$17.5k overrun, ~3.2h delay, 64% satisfaction (n=5,586)\n"
+        "• swap locations: ~$27.6k overrun, ~5.2h delay, 69% satisfaction (n=12,221)\n\n"
         "Option 1 achieves the highest composite score by minimizing principal photography delays while staying within budget bounds.\n\n"
         "Would you like me to walk you through approving this option or reviewing other strategies?"
     )
@@ -827,7 +827,7 @@ async def _deterministic_fallback(
     # Clarifying fallback
     return {
         "answer": sanitize_text(
-            "I didn't quite catch that — could you clarify? "
+            "I didn't quite catch that. Could you clarify? "
             "I can explain recovery options, check weather risk for your shoot plan, "
             "show historical evidence from ClickHouse, or walk you through the investigation pipeline."
         ),

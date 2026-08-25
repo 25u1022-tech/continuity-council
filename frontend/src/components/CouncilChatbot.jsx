@@ -27,7 +27,7 @@ export const PREFILLED_PROMPTS = [
 export const INITIAL_MESSAGE = {
   id: "init",
   sender: "ai",
-  text: "Hi there! I'm your council assistant — I can walk you through reporting a disruption, explain any recommendation, or answer anything else on your mind. What can I help you with today?",
+  text: "Hi there! I'm your council assistant. I can walk you through reporting a disruption, explain any recommendation, or answer anything else on your mind. What can I help you with today?",
   sources: [],
   timestamp: new Date(),
 };
@@ -183,7 +183,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         id: `err_${Date.now()}`,
         sender: "ai",
         text:
-          "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
+          "I'm having a little trouble reaching the council right now. One moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
         sources: [],
         timestamp: new Date(),
       };
@@ -509,7 +509,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything — I'm here to help…"
+                placeholder="Ask me anything: I'm here to help…"
                 disabled={loading}
                 className="flex-1 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3.5 py-2 text-[12.5px] text-[var(--cc-text-primary)] placeholder-[var(--cc-text-quaternary)] focus:border-[var(--cc-text-primary)] focus:outline-none transition-colors"
               />

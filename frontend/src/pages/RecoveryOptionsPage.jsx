@@ -183,7 +183,7 @@ export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
             <AlertDialogDescription className="text-[13px] leading-relaxed text-[var(--cc-text-secondary)]">
               Estimated {fmtMoney(confirming?.estimated_cost_usd)} overrun · {fmtHours(confirming?.estimated_delay_hours)} delay ·{" "}
               {confirming?.scene_changes?.length || 0} scene move(s). The Auditor writes this decision to the
-              ClickHouse ledger — this is the official production record.
+              ClickHouse ledger: this is the official production record.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
@@ -414,7 +414,7 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
                 <span className="font-mono text-[var(--cc-text-primary)]">{fmtMoney(option.estimated_cost_usd)}</span>
               </div>
               <div className="pt-1 text-[11px] text-[var(--cc-text-tertiary)]">
-                Rate card v1 benchmarks calibrated with empirical evidence —{" "}
+                Rate card v1 benchmarks calibrated with empirical evidence:{" "}
                 <Link to="/methodology" className="text-[var(--cc-text-primary)] underline hover:opacity-80">
                   see Cost Methodology
                 </Link>

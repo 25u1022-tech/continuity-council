@@ -133,8 +133,8 @@ async def calibrate_and_synthesize_tool(
                 "You are the Orchestrator of a film production recovery council. "
                 f"Disruption: {case.disruption.disruption_type}, severity {case.disruption.severity}, "
                 f"Day {case.disruption.affected_day}. "
-                f"ClickHouse historical evidence — {evidence_lines}. "
-                f"Ranked options — {option_lines}. Recommended: {recommended.name}. "
+                f"ClickHouse historical evidence: {evidence_lines}. "
+                f"Ranked options: {option_lines}. Recommended: {recommended.name}. "
                 "Return JSON {\"evidence_brief\": \"2 sentences comparing strategies with numbers\", "
                 "\"rationale\": \"2 sentences why recommended option wins\"}.",
                 timeout=6.0,
@@ -314,7 +314,7 @@ class SynthesisAgent(BaseAgent):
             case.evidence_narrative = synthesis_payload["evidence_narrative"]
 
         recommended = next((o for o in case.options if o.recommended), None)
-        summary = f"Ranked {len(case.options)} options — recommending '{recommended.name if recommended else 'n/a'}'"
+        summary = f"Ranked {len(case.options)} options: recommending '{recommended.name if recommended else 'n/a'}'"
         case.agent_complete("orchestrator", summary, case.recommendation_rationale)
         yield Event(
             author=self.name,

@@ -57,6 +57,6 @@ describe("days.js utility", () => {
     expect(dateToDay(legacyProd, "2026-08-20")).toBeNull();
     expect(dayLabel(legacyProd, 2)).toBe("Day 2");
     expect(dayLabel(null, 4)).toBe("Day 4");
-    expect(dayLabel(prod, null)).toBe("Day —");
+    expect(dayLabel(prod, null)).toBe("Day -");
   });
 });

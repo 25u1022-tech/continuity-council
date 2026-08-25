@@ -94,7 +94,7 @@ export default function InvestigationPage({ caseId, onCaseUpdate }) {
             <SeverityBadge severity={caseData.disruption?.severity} />
             {caseData.llm_mode === "deterministic" && (
               <Pill tone="yellow" testId="llm-fallback-badge">
-                Gemini quota reached — deterministic reasoning
+                Gemini quota reached: deterministic reasoning
               </Pill>
             )}
           </p>

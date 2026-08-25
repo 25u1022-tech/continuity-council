@@ -43,7 +43,7 @@ async def write_decision_ledger(case: CaseState, option: RecoveryOption, approve
         "disruption_type": case.disruption.disruption_type,
         "affected_location_id": case.disruption.affected_location_id,
         "selected_option": f"{option.option_id}:{option.strategy}",
-        "option_summary": f"{option.name} — {option.description}",
+        "option_summary": f"{option.name}: {option.description}",
         "estimated_cost_usd": int(option.estimated_cost_usd),
         "estimated_delay_hours": float(option.estimated_delay_hours),
         "continuity_risk_score": float(option.continuity_risk_score),

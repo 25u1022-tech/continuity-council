@@ -362,7 +362,7 @@ async def get_country_factor(country_code: str) -> Dict[str, Any]:
         "gdp_ppp": US_GDP_PPP_BENCHMARK,
         "source_note": "Unknown country fallback (1.0x baseline)",
         "is_fallback": True,
-        "warning": f"Unknown country code '{code}' — using default 1.0x factor",
+        "warning": f"Unknown country code '{code}': using default 1.0x factor",
     }
     _WB_CACHE[code] = (now, result)
     return result

@@ -48,7 +48,7 @@ def validate_continuity(option: RecoveryOption, scenes: List[Dict[str, Any]]) ->
                 risks.append(ContinuityRisk(
                     scene_ids=[dep, s["scene_id"]],
                     risk=(
-                        f"{s['scene_id']} now shoots before its prerequisite {dep} — "
+                        f"{s['scene_id']} now shoots before its prerequisite {dep}: "
                         "narrative order breaks."
                     ),
                     level="high",
@@ -70,7 +70,7 @@ def validate_continuity(option: RecoveryOption, scenes: List[Dict[str, Any]]) ->
                 scene_ids=sorted(ids),
                 risk=(
                     f"Scenes sharing '{tag.replace('_', ' ')}' continuity are now split across "
-                    f"days {sorted(days)} — wardrobe/state matching required."
+                    f"days {sorted(days)}: wardrobe/state matching required."
                 ),
                 level="medium",
             ))

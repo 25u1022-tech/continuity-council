@@ -279,14 +279,14 @@ export const DISRUPTION_TYPES = [
 
 export const fmtMoney = (n) =>
   n === null || n === undefined
-    ? "—"
+    ? "-"
     : `$${Math.round(Number(n)).toLocaleString("en-US")}`;
 
 export const fmtHours = (n) =>
-  n === null || n === undefined ? "—" : `${Number(n).toFixed(1)}h`;
+  n === null || n === undefined ? "-" : `${Number(n).toFixed(1)}h`;
 
 export const riskLabel = (score) => {
-  if (score === null || score === undefined) return "—";
+  if (score === null || score === undefined) return "-";
   if (score < 0.2) return "Low";
   if (score < 0.45) return "Medium";
   return "High";

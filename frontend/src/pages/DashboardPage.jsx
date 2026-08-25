@@ -168,7 +168,7 @@ export default function DashboardPage({ activeCaseId }) {
 
       <div className="grid grid-cols-12 gap-6">
         {/* Shooting Schedule Table */}
-        <div className="cc-card col-span-12 overflow-hidden xl:col-span-8">
+        <div className="cc-card col-span-12 min-w-0 overflow-hidden xl:col-span-8">
           <div className="border-b border-[var(--cc-border)] px-6 py-4">
             <span className="text-[15px] font-semibold text-[var(--cc-text-primary)]">Shooting schedule</span>
           </div>
@@ -218,8 +218,8 @@ export default function DashboardPage({ activeCaseId }) {
         </div>
 
         {/* Right Rail: Cast / Location / Disruptions */}
-        <div className="col-span-12 space-y-5 xl:col-span-4">
-          <div className="cc-card p-6" data-testid="cast-availability-card">
+        <div className="col-span-12 min-w-0 space-y-5 xl:col-span-4">
+          <div className="cc-card min-w-0 overflow-hidden p-6" data-testid="cast-availability-card">
             <div className="mb-4 flex items-center gap-2">
               <Users size={15} strokeWidth={1.5} className="text-[var(--cc-text-tertiary)]" />
               <span className="text-[15px] font-semibold text-[var(--cc-text-primary)]">Cast availability</span>
@@ -231,7 +231,7 @@ export default function DashboardPage({ activeCaseId }) {
             />
           </div>
 
-          <div className="cc-card p-6" data-testid="location-availability-card">
+          <div className="cc-card min-w-0 overflow-hidden p-6" data-testid="location-availability-card">
             <div className="mb-4 flex items-center gap-2">
               <MapPin size={15} strokeWidth={1.5} className="text-[var(--cc-text-tertiary)]" />
               <span className="text-[15px] font-semibold text-[var(--cc-text-primary)]">Location availability</span>
@@ -301,33 +301,38 @@ export default function DashboardPage({ activeCaseId }) {
 }
 
 const AvailabilityGrid = ({ rows, days, lookup }) => (
-  <div className="space-y-3">
-    <div className="flex items-center justify-end gap-2 pr-1">
-      {days.map((d) => (
-        <span key={d} className="tabular w-8 text-center text-[11px] font-medium text-[var(--cc-text-tertiary)]">D{d}</span>
-      ))}
-    </div>
-    {rows.map((r) => (
-      <div key={r.id} className="flex items-center justify-between gap-2 border-b border-[var(--cc-border-subtle)] pb-2 last:border-b-0">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-[var(--cc-text-primary)]">{r.label}</div>
-          <div className="text-[11px] capitalize text-[var(--cc-text-secondary)]">{r.sub}</div>
-        </div>
+  <div className="overflow-x-auto">
+    <div className="min-w-full space-y-3">
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <div className="sticky left-0 min-w-[110px] max-w-[130px] shrink-0 bg-[var(--cc-surface)]" />
         <div className="flex shrink-0 items-center gap-2 pr-1">
-          {days.map((d) => {
-            const ok = lookup(r.id, d);
-            return (
-              <span key={d} className="flex w-8 justify-center">
-                {ok ? (
-                  <CircleCheck size={15} strokeWidth={1.75} className="text-[var(--cc-green-dot)]" />
-                ) : (
-                  <CircleX size={15} strokeWidth={1.75} className="text-[var(--cc-red-dot)]" />
-                )}
-              </span>
-            );
-          })}
+          {days.map((d) => (
+            <span key={d} className="tabular w-8 text-center text-[11px] font-medium text-[var(--cc-text-tertiary)]">D{d}</span>
+          ))}
         </div>
       </div>
-    ))}
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center justify-between gap-2 border-b border-[var(--cc-border-subtle)] pb-2 last:border-b-0">
+          <div className="sticky left-0 min-w-[110px] max-w-[130px] shrink-0 bg-[var(--cc-surface)] pr-2">
+            <div className="truncate text-[13px] font-medium text-[var(--cc-text-primary)]">{r.label}</div>
+            <div className="text-[11px] capitalize text-[var(--cc-text-secondary)]">{r.sub}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 pr-1">
+            {days.map((d) => {
+              const ok = lookup(r.id, d);
+              return (
+                <span key={d} className="flex w-8 justify-center">
+                  {ok ? (
+                    <CircleCheck size={15} strokeWidth={1.75} className="text-[var(--cc-green-dot)]" />
+                  ) : (
+                    <CircleX size={15} strokeWidth={1.75} className="text-[var(--cc-red-dot)]" />
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 );

@@ -74,7 +74,7 @@ export const Shell = ({ children, activeCase }) => {
     try {
       await resetDemo(selectedId);
       safeStorage.removeItem("cc_active_case");
-      toast.success("Reset — baseline schedule restored");
+      toast.success("Reset: baseline schedule restored");
       setTimeout(() => {
         window.location.href = "/";
       }, 700);
@@ -288,7 +288,7 @@ export const Shell = ({ children, activeCase }) => {
         <main className="mx-auto flex w-full max-w-[1560px] flex-1 flex-col justify-between px-6 py-8">
           <div>{children}</div>
           <footer className="mt-16 border-t border-[var(--cc-border)] pt-6 pb-2 text-center text-[12px] text-[var(--cc-text-secondary)]">
-            Live data: <span className="text-[var(--cc-text-primary)] font-medium">Open-Meteo</span> · <span className="text-[var(--cc-text-primary)] font-medium">OpenStreetMap</span> · <span className="text-[var(--cc-text-primary)] font-medium">World Bank (CC-BY 4.0)</span> · <span className="text-[var(--cc-text-primary)] font-medium">ECB</span> —{" "}
+            Live data: <span className="text-[var(--cc-text-primary)] font-medium">Open-Meteo</span> · <span className="text-[var(--cc-text-primary)] font-medium">OpenStreetMap</span> · <span className="text-[var(--cc-text-primary)] font-medium">World Bank (CC-BY 4.0)</span> · <span className="text-[var(--cc-text-primary)] font-medium">ECB</span> ·{" "}
             <Link to="/methodology" data-testid="footer-methodology-link" className="text-[var(--cc-text-primary)] font-medium underline underline-offset-2 hover:opacity-80">
               methodology
             </Link>

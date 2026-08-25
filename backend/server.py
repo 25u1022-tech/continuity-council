@@ -603,7 +603,7 @@ async def get_case_html_report(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Continuity Council — Executive Recovery Report ({case_id})</title>
+    <title>Continuity Council: Executive Recovery Report ({case_id})</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 32px 20px; }}
         .container {{ max-width: 900px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
@@ -624,7 +624,7 @@ async def get_case_html_report(
     <div class="container">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
             <div>
-                <h1>Continuity Council — Executive Recovery Report</h1>
+                <h1>Continuity Council: Executive Recovery Report</h1>
                 <div class="meta">Case ID: <code>{case_id}</code> · Production: <code>{disruption.production_id}</code> · Status: <strong>{case.status.upper()}</strong></div>
             </div>
             <div style="text-align:right;">
@@ -832,13 +832,13 @@ async def chat_endpoint(req: ChatRequest):
     except asyncio.TimeoutError:
         logger.warning("Chatbot request timed out after 8.0s")
         return {
-            "answer": "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
+            "answer": "I'm having a little trouble reaching the council right now. One moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
             "sources": [],
         }
     except Exception as exc:
         logger.exception("Chatbot request failed: %s", exc)
         return {
-            "answer": "I'm having a little trouble reaching the council right now — one moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
+            "answer": "I'm having a little trouble reaching the council right now. One moment, or try asking me how to report a disruption. I'm always here to help you step-by-step!",
             "sources": [],
         }
 
@@ -967,7 +967,8 @@ async def shutdown():
 
 
 async def _warmup_gemini():
-    marker = FilePath("/tmp/.gemini_warmup")
+    import tempfile
+    marker = FilePath(tempfile.gettempdir()) / ".gemini_warmup"
     try:
         import time as _time
 

@@ -70,7 +70,7 @@ export function dateToDay(production, isoDate) {
  */
 export function dayLabel(production, dayNumber) {
   if (dayNumber === undefined || dayNumber === null || isNaN(dayNumber)) {
-    return "Day —";
+    return "Day -";
   }
   const n = parseInt(dayNumber, 10);
   const iso = dayToDate(production, n);
