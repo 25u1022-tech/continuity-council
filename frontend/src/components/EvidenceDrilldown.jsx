@@ -161,7 +161,7 @@ export const EvidenceDrilldown = ({ open, onOpenChange, strategy, disruptionType
                   >
                     <td className="py-2.5 pr-3 font-mono text-[11px] text-[var(--cc-text-secondary)]">{r.disruption_id}</td>
                     <td className="py-2.5 pr-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${sevTone[r.severity] || "bg-[var(--cc-gray-bg)] text-[var(--cc-gray-text)]"}`}>
+                      <span className={`rounded-[4px] px-1.5 py-0.5 text-[10px] font-medium ${sevTone[r.severity] || "bg-[var(--cc-gray-bg)] text-[var(--cc-gray-text)]"}`}>
                         {sentenceCase(r.severity)}
                       </span>
                     </td>

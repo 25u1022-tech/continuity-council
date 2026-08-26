@@ -48,19 +48,22 @@ export default function DashboardPage({ activeCaseId }) {
       if (!h?.clickhouse?.connected) {
         setBundle(null);
         setError("ClickHouse Cloud is not connected. Add credentials to load this production.");
-      } else {
-        try {
-          setBundle(await getProduction(selectedId));
-          setError(null);
-        } catch (e) {
-          setBundle(null);
-          setError(e?.response?.data?.detail || e?.message || "Could not load this production.");
-        }
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    }).catch((e) => {
+      try {
+        const b = await getProduction(selectedId);
+        if (!alive) return;
+        setBundle(b);
+      } catch (err) {
+        if (!alive) return;
+        setError(err.message || "Failed to load production");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }).catch((err) => {
       if (!alive) return;
-      setError(e?.response?.data?.detail || e?.message || "Could not check production services.");
+      setError(err.message || "Failed to load health");
       setLoading(false);
     });
     return () => { alive = false; };
@@ -68,33 +71,34 @@ export default function DashboardPage({ activeCaseId }) {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="cc-shimmer h-24 w-full" />
+      <div className="space-y-6" data-testid="dashboard-loading-skeleton">
+        <Skeleton className="h-10 w-72 rounded-[8px]" />
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="cc-shimmer h-28" />)}
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-[12px]" />
+          ))}
         </div>
-        <Skeleton className="cc-shimmer h-96 w-full" />
+        <div className="grid grid-cols-12 gap-6">
+          <Skeleton className="col-span-12 h-96 rounded-[12px] xl:col-span-8" />
+          <Skeleton className="col-span-12 h-96 rounded-[12px] xl:col-span-4" />
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !bundle?.production) {
     return (
-      <div className="cc-card mx-auto mt-16 max-w-xl p-8 text-center" data-testid="dashboard-setup-state">
-        <Database size={28} strokeWidth={1.5} className="mx-auto text-[var(--cc-text-primary)]" />
-        <h2 className="font-display mt-4 text-[20px] font-semibold text-[var(--cc-text-primary)]">
-          ClickHouse Cloud not connected
-        </h2>
-        <p className="mt-2 text-[13px] leading-6 text-[var(--cc-text-secondary)]">{String(error)}</p>
-        <p className="mt-4 font-mono text-xs text-[var(--cc-text-tertiary)]">
-          Add credentials to backend/.env, run python clickhouse/seed.py, restart the backend.
-        </p>
+      <div className="cc-card p-10 text-center" data-testid="dashboard-error-state">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[10px] bg-[var(--cc-accent-rose)]/10 text-[var(--cc-accent-rose)]">
+          <Siren size={24} />
+        </div>
+        <h2 className="mt-4 text-[18px] font-semibold text-[var(--cc-text-primary)]">Unable to load production</h2>
+        <p className="mt-1 text-[13px] text-[var(--cc-text-secondary)]">{error || "Production not found"}</p>
         <Button
-          type="button"
           onClick={() => window.location.reload()}
-          className="mt-5 rounded-[10px]"
+          className="mt-6 rounded-[8px] bg-[var(--cc-text-primary)] text-[var(--cc-canvas)]"
         >
-          Try again
+          Retry
         </Button>
       </div>
     );
@@ -132,7 +136,7 @@ export default function DashboardPage({ activeCaseId }) {
             data-testid="import-schedule-pdf-btn"
             variant="outline"
             onClick={() => setImportModalOpen(true)}
-            className="rounded-[10px] border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] hover:bg-[var(--cc-surface-hover)] flex items-center gap-2 shadow-sm"
+            className="rounded-[8px] border-[var(--cc-border)] bg-[var(--cc-surface)] text-[var(--cc-text-primary)] hover:bg-[var(--cc-surface-hover)] flex items-center gap-2 shadow-sm"
           >
             <Upload size={14} />
             <span>Import schedule (PDF)</span>
@@ -140,7 +144,7 @@ export default function DashboardPage({ activeCaseId }) {
           <Button
             data-testid="dashboard-report-disruption-btn"
             onClick={() => navigate("/report")}
-            className="rounded-[10px] bg-[var(--cc-text-primary)] text-[var(--cc-canvas)] hover:bg-[var(--cc-text-primary)]/90 shadow-sm"
+            className="rounded-[8px] bg-[var(--cc-text-primary)] text-[var(--cc-canvas)] hover:bg-[var(--cc-text-primary)]/90 shadow-sm"
           >
             Report disruption
           </Button>
@@ -287,6 +291,7 @@ export default function DashboardPage({ activeCaseId }) {
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         productionId={selectedId}
+        currentSceneCount={scenes ? scenes.length : 0}
         onImportComplete={async () => {
           try {
             const updated = await getProduction(selectedId);

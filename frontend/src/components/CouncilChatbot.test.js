@@ -175,6 +175,61 @@ describe("CouncilChatbot Component", () => {
     expect(api.generateTTS).toHaveBeenCalledWith("Here is your disruption analysis.");
   });
 
+  test("disables speak button and ignores duplicate clicks while audio generation is in flight", async () => {
+    let resolveTTS;
+    const ttsPromise = new Promise((resolve) => {
+      resolveTTS = resolve;
+    });
+    api.generateTTS.mockReturnValueOnce(ttsPromise);
+    api.sendChatMessage.mockResolvedValueOnce({
+      answer: "Response for audio test",
+      sources: [],
+    });
+
+    await act(async () => {
+      root.render(<CouncilChatbot productionId="prod_001" />);
+    });
+
+    const fab = container.querySelector("#council-chatbot-fab");
+    await act(async () => {
+      fab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const buttons = Array.from(container.querySelectorAll("button"));
+    const chipBtn = buttons.find((b) => b.textContent.includes("How do I report a disruption?"));
+    await act(async () => {
+      chipBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const speakBtn = container.querySelector('[data-testid^="tts-speak-btn-"]');
+    expect(speakBtn).not.toBeNull();
+
+    // First click triggers TTS generation
+    await act(async () => {
+      speakBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(api.generateTTS).toHaveBeenCalledTimes(1);
+    expect(speakBtn.disabled).toBe(true);
+    expect(speakBtn.getAttribute("title")).toContain("Generating voice audio");
+
+    // Second click while in flight should be ignored
+    await act(async () => {
+      speakBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(api.generateTTS).toHaveBeenCalledTimes(1);
+
+    // Resolve in-flight request
+    await act(async () => {
+      resolveTTS({ hash: "hash123", status: "ready" });
+      await Promise.resolve();
+    });
+
+    expect(speakBtn.disabled).toBe(false);
+  });
+
   test("renders markdown ordered and unordered lists without duplicate numbering", async () => {
     api.sendChatMessage.mockResolvedValueOnce({
       answer: "Here is how to report a disruption step-by-step:\n\n1. Click Report disruption in the top navigation\n2. Select the Disruption Type\n3. Review the real-time Impact Preview\n\nKey considerations:\n- Cost\n- Delay\n- Continuity",

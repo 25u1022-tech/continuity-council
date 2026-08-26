@@ -1999,6 +1999,42 @@ class TestSchedulePDFExtractor:
         # 4. Total shoot days derived correctly
         assert normalized["total_shoot_days"] == 2
 
+    def test_normalize_extracted_data_nested_schedule_schema(self):
+        """Verify normalization handles nested schedule structures (previously failed)."""
+        from services.schedule_extractor import normalize_extracted_data
+
+        raw = {
+            "schedule": [
+                {
+                    "day": 1,
+                    "date": "2026-08-24",
+                    "scenes": [
+                        {"scene_number": 101, "setting": "INT. LAB", "cast": ["Dr. Aris"], "pages": 1.5},
+                        {"scene_number": 102, "setting": "EXT. COURTYARD", "cast": ["Dr. Aris", "Guard 1"], "pages": 2.0},
+                    ],
+                },
+                {
+                    "day": 2,
+                    "date": "2026-08-25",
+                    "scenes": [
+                        {"scene_number": 201, "setting": "INT. VAULT", "cast": ["Dr. Aris"], "pages": 3.0},
+                    ],
+                },
+            ]
+        }
+        res = normalize_extracted_data(raw)
+        assert res["total_shoot_days"] == 2
+        assert len(res["scenes"]) == 3
+        assert res["scenes"][0]["shoot_day"] == 1
+        assert res["scenes"][2]["shoot_day"] == 2
+        # Verify auto-discovered cast and locations
+        cast_names = [c["name"] for c in res["cast"]]
+        assert "Dr. Aris" in cast_names
+        assert "Guard 1" in cast_names
+        loc_names = [l["name"] for l in res["locations"]]
+        assert "INT. LAB" in loc_names
+        assert "INT. VAULT" in loc_names
+
     def test_import_schedule_endpoint_lifecycle(self):
         import asyncio
         import io

@@ -6,7 +6,7 @@ import React from "react";
  */
 
 const pillBase =
-  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium leading-5 whitespace-nowrap cc-transition";
+  "inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[11.5px] font-medium leading-4 tracking-tight whitespace-nowrap cc-transition";
 
 export const Pill = ({ tone = "gray", children, testId, className = "" }) => {
   const toneClasses = {

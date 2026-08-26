@@ -248,7 +248,7 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
           {nlResult?.confidence && (
             <div
               data-testid="nl-confidence-chip"
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+              className={`inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[11px] font-medium ${
                 nlResult.confidence === "high"
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                   : nlResult.confidence === "medium"

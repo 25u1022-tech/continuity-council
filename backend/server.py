@@ -885,6 +885,29 @@ async def tts_generate(req: dict = fastapi.Body(...)):
     }
 
 
+@api.head("/chat/tts")
+async def tts_head(message_hash: str = Query(...)):
+    """Check if TTS audio is ready without transmitting audio payload.
+
+    Returns:
+    - 200 with media headers if audio is cached/ready
+    - 204 No Content if audio is still generating or not ready
+    """
+    cached = tts_service.get_cached(message_hash)
+    if cached is None:
+        return Response(status_code=204)
+
+    mime = cached.get("mime_type", "audio/wav")
+    return Response(
+        status_code=200,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'inline; filename="tts_{message_hash}.wav"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
 @api.get("/chat/tts")
 async def tts_get(message_hash: str = Query(...)):
     """Retrieve cached TTS audio by message hash.

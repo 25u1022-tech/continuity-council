@@ -1,10 +1,11 @@
 import React, { useLayoutEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { Shell } from "./components/layout/Shell";
 import { ProductionProvider } from "./context/ProductionContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportDisruptionPage from "./pages/ReportDisruptionPage";
 import InvestigationPage from "./pages/InvestigationPage";
@@ -15,6 +16,14 @@ import SettingsPage from "./pages/SettingsPage";
 import "./App.css";
 import { hasColdStart, onColdStart } from "./lib/api";
 import { safeStorage } from "./lib/storage";
+
+function StudioLayout({ activeCase }) {
+  return (
+    <Shell activeCase={activeCase}>
+      <Outlet />
+    </Shell>
+  );
+}
 
 function AppContent() {
   const { theme } = useTheme();
@@ -55,10 +64,11 @@ function AppContent() {
             Starting production services: the first visit can take a few seconds.
           </div>
         )}
-        <Shell activeCase={activeCase}>
-          <ErrorBoundary>
-            <Routes>
-              <Route path="/" element={<DashboardPage activeCaseId={activeCaseId} />} />
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route element={<StudioLayout activeCase={activeCase} />}>
+              <Route path="/dashboard" element={<DashboardPage activeCaseId={activeCaseId} />} />
               <Route
                 path="/report"
                 element={<ReportDisruptionPage setActiveCaseId={setActiveCaseId} />}
@@ -78,9 +88,9 @@ function AppContent() {
               <Route path="/ledger" element={<DecisionLedgerPage />} />
               <Route path="/methodology" element={<DataMethodologyPage />} />
               <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
-          </ErrorBoundary>
-        </Shell>
+            </Route>
+          </Routes>
+        </ErrorBoundary>
       </ProductionProvider>
 
       <Toaster position="bottom-right" theme={theme === "light" ? "light" : "dark"} richColors />

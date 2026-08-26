@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { to: "/", label: "Production dashboard", icon: LayoutDashboard, id: "production-dashboard", end: true },
+  { to: "/dashboard", label: "Production dashboard", icon: LayoutDashboard, id: "production-dashboard", end: true },
   { to: "/report", label: "Report disruption", icon: Siren, id: "report-disruption" },
   { to: "/investigation", label: "Agent investigation", icon: Radar, id: "agent-investigation" },
   { to: "/options", label: "Recovery options", icon: GitCompareArrows, id: "recovery-options" },
@@ -76,7 +76,7 @@ export const Shell = ({ children, activeCase }) => {
       safeStorage.removeItem("cc_active_case");
       toast.success("Reset: baseline schedule restored");
       setTimeout(() => {
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       }, 700);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Reset failed");
@@ -88,7 +88,7 @@ export const Shell = ({ children, activeCase }) => {
   const handleCreated = async (res) => {
     if (res?.production_id) select(res.production_id);
     await refresh();
-    navigate("/");
+    navigate("/dashboard");
   };
 
   return (
@@ -276,8 +276,8 @@ export const Shell = ({ children, activeCase }) => {
               <Siren size={13} strokeWidth={1.75} />
               Report disruption
             </Button>
-            <div className="flex items-center gap-2 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface)] py-1 pl-1.5 pr-3 shadow-sm">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--cc-surface-hover)] text-[var(--cc-text-primary)]">
+            <div className="flex items-center gap-2 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface)] py-1 pl-2 pr-2.5">
+              <div className="flex h-5 w-5 items-center justify-center rounded-[5px] bg-[var(--cc-surface-hover)] text-[var(--cc-text-primary)]">
                 <UserRound size={12} strokeWidth={1.75} />
               </div>
               <span className="text-xs font-medium text-[var(--cc-text-primary)]">Producer</span>

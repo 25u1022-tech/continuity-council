@@ -78,82 +78,166 @@ def normalize_day_night(val: Any) -> str:
 
 
 def normalize_extracted_data(raw: Dict[str, Any], default_start_date: str = "2026-08-24") -> Dict[str, Any]:
-    """Normalize and deduplicate raw AI extraction payload."""
-    # 1. Cast deduplication
-    raw_cast = raw.get("cast") or []
+    """Normalize, flatten and deduplicate raw AI extraction payload (handles both flat and nested schemas)."""
+    if not isinstance(raw, dict):
+        raw = {}
+
+    # 1. Flexible scene collection (defense-in-depth)
+    extracted_scene_dicts: List[Dict[str, Any]] = []
+
+    # Case A: Top-level scenes array
+    if isinstance(raw.get("scenes"), list):
+        for s in raw["scenes"]:
+            if isinstance(s, dict):
+                extracted_scene_dicts.append(s)
+
+    # Case B: Top-level schedule / shoot_days / days / shooting_schedule
+    for key in ("schedule", "shoot_days", "days", "shooting_schedule", "production_schedule"):
+        val = raw.get(key)
+        if isinstance(val, list):
+            for day_idx, day_obj in enumerate(val):
+                if not isinstance(day_obj, dict):
+                    continue
+                d_num = day_obj.get("day_number") or day_obj.get("day") or (day_idx + 1)
+                try:
+                    d_num = int(d_num)
+                except (ValueError, TypeError):
+                    d_num = day_idx + 1
+
+                day_scenes = day_obj.get("scenes") or []
+                if isinstance(day_scenes, list):
+                    for sc_item in day_scenes:
+                        if isinstance(sc_item, dict):
+                            sc_item_copy = dict(sc_item)
+                            if "shoot_day" not in sc_item_copy and "day_number" not in sc_item_copy:
+                                sc_item_copy["shoot_day"] = d_num
+                            extracted_scene_dicts.append(sc_item_copy)
+
+    # Deduplicate extracted_scene_dicts
+    deduped_raw_scenes: List[Dict[str, Any]] = []
+    seen_scene_ids: Set[str] = set()
+    for sc in extracted_scene_dicts:
+        s_num = str(sc.get("scene_number") or sc.get("scene_id") or len(deduped_raw_scenes) + 1).strip()
+        s_day = str(sc.get("shoot_day") or sc.get("day_number") or 1).strip()
+        key = f"{s_day}_{s_num}"
+        if key not in seen_scene_ids:
+            seen_scene_ids.add(key)
+            deduped_raw_scenes.append(sc)
+
+    # 2. Shoot Days map
+    day_map: Dict[int, str] = {}
+    for key in ("shoot_days", "days", "schedule"):
+        val = raw.get(key)
+        if isinstance(val, list):
+            for d_idx, d in enumerate(val):
+                if isinstance(d, dict):
+                    try:
+                        d_num = int(d.get("day_number") or d.get("day") or (d_idx + 1))
+                        d_date = str(d.get("date") or default_start_date)
+                        day_map[d_num] = d_date
+                    except (ValueError, TypeError):
+                        continue
+
+    # 3. Cast collection & deduplication
+    raw_cast = raw.get("cast") or raw.get("cast_members") or []
     seen_cast: Set[str] = set()
     cast_list: List[Dict[str, Any]] = []
 
-    for item in raw_cast:
-        name = (item if isinstance(item, str) else item.get("name", "")).strip()
-        if not name or name.lower() in seen_cast:
-            continue
-        seen_cast.add(name.lower())
-        role_type = "lead" if len(cast_list) == 0 else "supporting"
-        if isinstance(item, dict) and item.get("role_type"):
-            role_type = item["role_type"]
-        cid = f"cast_{name.lower().replace(' ', '_')[:16]}"
-        cast_list.append({
-            "cast_id": cid,
-            "name": name,
-            "role_type": role_type,
-            "day_rate_usd": 1200 if role_type == "supporting" else 3500,
-        })
+    if isinstance(raw_cast, list):
+        for item in raw_cast:
+            name = (item if isinstance(item, str) else item.get("name", "")).strip()
+            if not name or name.lower() in seen_cast:
+                continue
+            seen_cast.add(name.lower())
+            role_type = "lead" if len(cast_list) == 0 else "supporting"
+            if isinstance(item, dict) and item.get("role_type"):
+                role_type = item["role_type"]
+            cid = f"cast_{name.lower().replace(' ', '_')[:16]}"
+            cast_list.append({
+                "cast_id": cid,
+                "name": name,
+                "role_type": role_type,
+                "day_rate_usd": 1200 if role_type == "supporting" else 3500,
+            })
 
-    # 2. Locations deduplication
-    raw_locs = raw.get("locations") or []
+    # Also discover cast from scenes if missing from top-level
+    for sc in deduped_raw_scenes:
+        for c in (sc.get("cast_names") or sc.get("cast") or sc.get("required_cast") or []):
+            c_name = (c if isinstance(c, str) else (c.get("name") if isinstance(c, dict) else "")).strip()
+            if c_name and c_name.lower() not in seen_cast:
+                seen_cast.add(c_name.lower())
+                role_type = "lead" if len(cast_list) == 0 else "supporting"
+                cid = f"cast_{c_name.lower().replace(' ', '_')[:16]}"
+                cast_list.append({
+                    "cast_id": cid,
+                    "name": c_name,
+                    "role_type": role_type,
+                    "day_rate_usd": 1200 if role_type == "supporting" else 3500,
+                })
+
+    # 4. Locations collection & deduplication
+    raw_locs = raw.get("locations") or raw.get("filming_locations") or []
     seen_locs: Set[str] = set()
     loc_list: List[Dict[str, Any]] = []
 
-    for item in raw_locs:
-        name = (item if isinstance(item, str) else item.get("name", "")).strip()
-        if not name or name.lower() in seen_locs:
-            continue
-        seen_locs.add(name.lower())
-        loc_type = "interior" if "INT" in name.upper() or "STAGE" in name.upper() else "exterior"
-        lid = f"loc_{name.lower().replace(' ', '_')[:16]}"
-        loc_list.append({
-            "location_id": lid,
-            "name": name,
-            "location_type": loc_type,
-            "daily_fee_usd": 5000 if loc_type == "exterior" else 3500,
-            "country_code": "US",
-            "country_mult": 1.0,
-            "city_tier": "tier_1",
-            "geo_mult": 1.0,
-        })
+    if isinstance(raw_locs, list):
+        for item in raw_locs:
+            name = (item if isinstance(item, str) else item.get("name", "")).strip()
+            if not name or name.lower() in seen_locs:
+                continue
+            seen_locs.add(name.lower())
+            loc_type = "interior" if "INT" in name.upper() or "STAGE" in name.upper() else "exterior"
+            lid = f"loc_{name.lower().replace(' ', '_')[:16]}"
+            loc_list.append({
+                "location_id": lid,
+                "name": name,
+                "location_type": loc_type,
+                "daily_fee_usd": 5000 if loc_type == "exterior" else 3500,
+                "country_code": "US",
+                "country_mult": 1.0,
+                "city_tier": "tier_1",
+                "geo_mult": 1.0,
+            })
 
-    # 3. Shoot Days
-    raw_days = raw.get("shoot_days") or []
-    day_map: Dict[int, str] = {}
-    for d in raw_days:
-        try:
-            d_num = int(d.get("day_number", 1))
-            d_date = str(d.get("date", default_start_date))
-            day_map[d_num] = d_date
-        except (ValueError, TypeError):
-            continue
+    # Also discover locations from scenes if missing
+    for sc in deduped_raw_scenes:
+        l_name = str(sc.get("location_name") or sc.get("location") or sc.get("setting") or "").strip()
+        if l_name and l_name.lower() not in seen_locs:
+            seen_locs.add(l_name.lower())
+            loc_type = "interior" if "INT" in l_name.upper() or "STAGE" in l_name.upper() else "exterior"
+            lid = f"loc_{l_name.lower().replace(' ', '_')[:16]}"
+            loc_list.append({
+                "location_id": lid,
+                "name": l_name,
+                "location_type": loc_type,
+                "daily_fee_usd": 4000,
+                "country_code": "US",
+                "country_mult": 1.0,
+                "city_tier": "tier_1",
+                "geo_mult": 1.0,
+            })
 
-    # 4. Scenes normalization
-    raw_scenes = raw.get("scenes") or []
+    # 5. Scenes normalization
     normalized_scenes: List[Dict[str, Any]] = []
     seq_counters: Dict[int, int] = {}
 
-    for idx, sc in enumerate(raw_scenes):
+    for idx, sc in enumerate(deduped_raw_scenes):
         sc_num = str(sc.get("scene_number") or sc.get("scene_id") or str(idx + 1)).strip()
-        sc_day = int(sc.get("shoot_day", 1))
+        try:
+            sc_day = int(sc.get("shoot_day") or sc.get("day_number") or sc.get("day") or 1)
+        except (ValueError, TypeError):
+            sc_day = 1
         if sc_day < 1:
             sc_day = 1
 
         seq_counters[sc_day] = seq_counters.get(sc_day, 0) + 1
         seq_order = sc.get("sequence_order") or seq_counters[sc_day]
 
-        sc_title = (sc.get("scene_title") or sc.get("description") or f"Scene {sc_num}").strip()
+        sc_title = (sc.get("scene_title") or sc.get("title") or sc.get("description") or f"Scene {sc_num}").strip()
         if len(sc_title) > 80:
             sc_title = sc_title[:77] + "..."
 
-        loc_name = str(sc.get("location_name") or "").strip()
-        # Find matching location ID
+        loc_name = str(sc.get("location_name") or sc.get("location") or sc.get("setting") or "").strip()
         matched_loc_id = "stage_a"
         if loc_name:
             for l in loc_list:
@@ -161,42 +245,23 @@ def normalize_extracted_data(raw: Dict[str, Any], default_start_date: str = "202
                     matched_loc_id = l["location_id"]
                     break
             else:
-                # Add auto-discovered location
-                if loc_name.lower() not in seen_locs:
-                    seen_locs.add(loc_name.lower())
-                    new_lid = f"loc_{loc_name.lower().replace(' ', '_')[:16]}"
-                    loc_list.append({
-                        "location_id": new_lid,
-                        "name": loc_name,
-                        "location_type": "interior" if "INT" in loc_name.upper() else "exterior",
-                        "daily_fee_usd": 4000,
-                        "country_code": "US",
-                        "country_mult": 1.0,
-                        "city_tier": "tier_1",
-                        "geo_mult": 1.0,
-                    })
-                    matched_loc_id = new_lid
+                matched_loc_id = f"loc_{loc_name.lower().replace(' ', '_')[:16]}"
 
-        # Cast names in scene
-        raw_scene_cast = sc.get("cast_names") or sc.get("required_cast") or []
+        raw_scene_cast = sc.get("cast_names") or sc.get("cast") or sc.get("required_cast") or []
         scene_cast_names = []
         for c in raw_scene_cast:
-            c_str = (c if isinstance(c, str) else c.get("name", "")).strip()
+            c_str = (c if isinstance(c, str) else (c.get("name") if isinstance(c, dict) else "")).strip()
             if c_str:
                 scene_cast_names.append(c_str)
-                # Auto-add to cast list if not seen
-                if c_str.lower() not in seen_cast:
-                    seen_cast.add(c_str.lower())
-                    new_cid = f"cast_{c_str.lower().replace(' ', '_')[:16]}"
-                    cast_list.append({
-                        "cast_id": new_cid,
-                        "name": c_str,
-                        "role_type": "supporting",
-                        "day_rate_usd": 1200,
-                    })
 
-        int_ext = normalize_int_ext(sc.get("int_ext") or loc_name)
-        day_night = normalize_day_night(sc.get("day_night") or sc.get("time_of_day"))
+        int_ext = normalize_int_ext(sc.get("int_ext") or sc_title or loc_name)
+        day_night = normalize_day_night(sc.get("day_night") or sc.get("time_of_day") or sc_title)
+
+        pages_val = 1.0
+        try:
+            pages_val = float(sc.get("pages") or sc.get("page_count") or 1.0)
+        except (ValueError, TypeError):
+            pages_val = 1.0
 
         normalized_scenes.append({
             "scene_id": f"sc_{sc_num.replace(' ', '_').lower()}",
@@ -210,7 +275,7 @@ def normalize_extracted_data(raw: Dict[str, Any], default_start_date: str = "202
             "int_ext": int_ext,
             "day_night": day_night,
             "description": str(sc.get("description", "")).strip(),
-            "pages": float(sc.get("pages", 1.0)),
+            "pages": pages_val,
             "is_cover_scene": 1 if sc.get("is_cover_scene") else 0,
             "priority": int(sc.get("priority", 3)),
             "continuity_tags": sc.get("continuity_tags", []),
@@ -322,59 +387,53 @@ async def process_schedule_pdf_async(job_id: str, pdf_bytes: bytes) -> None:
     prompt = (
         "You are an expert film production coordinator and schedule parser.\n"
         "Carefully analyze this shooting schedule or call sheet PDF document and extract all shoot days, "
-        "filming locations, cast members/characters, and scene breakdowns.\n\n"
-        "Return a JSON object conforming to this exact schema:\n"
-        "{\n"
-        '  "shoot_days": [\n'
-        '    {"day_number": 1, "date": "2026-08-24", "scenes": ["1", "2A"]}\n'
-        "  ],\n"
-        '  "scenes": [\n'
-        "    {\n"
-        '      "scene_number": "1",\n'
-        '      "scene_title": "Scene summary",\n'
-        '      "description": "Scene action details",\n'
-        '      "location_name": "Location or stage name",\n'
-        '      "cast_names": ["Actor 1", "Actor 2"],\n'
-        '      "int_ext": "INT",\n'
-        '      "day_night": "DAY",\n'
-        '      "pages": 1.2,\n'
-        '      "shoot_day": 1\n'
-        "    }\n"
-        "  ],\n"
-        '  "locations": ["Harbor Pier 7", "Downtown Loft", "Stage A"],\n'
-        '  "cast": ["Mara Voss", "Dev Okafor", "Lena Petrov"]\n'
-        "}\n"
+        "filming locations, cast members/characters, and scene breakdowns.\n"
+        "Extract every scene with its scene number, location/setting, INT/EXT, DAY/NIGHT, pages, assigned shoot day, and cast members."
     )
 
     extracted_raw = None
+    last_error_detail = None
     try:
-        # 1. Attempt Gemini native multimodal document extraction (30s timeout)
+        # 1. Attempt Gemini native multimodal document extraction (60s timeout, schema constrained)
         extracted_raw = await gemini_client.generate_json_with_pdf(
             pdf_bytes=pdf_bytes,
             prompt=prompt,
-            timeout=30.0,
-            max_tokens=4096,
+            timeout=60.0,
+            max_tokens=8192,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        last_error_detail = f"{type(exc).__name__}: {exc}"
         logger.warning("Gemini PDF extraction encountered error: %s", exc)
 
     # 2. Fallback to heuristic parser if Gemini returned empty or was unavailable
-    if not extracted_raw or not isinstance(extracted_raw, dict) or not extracted_raw.get("scenes"):
+    if not extracted_raw or not isinstance(extracted_raw, dict) or not (
+        extracted_raw.get("scenes") or extracted_raw.get("shoot_days") or extracted_raw.get("schedule") or extracted_raw.get("days")
+    ):
         logger.info("Attempting heuristic text parser fallback for job %s", job_id)
         extracted_raw = heuristic_pdf_text_parser(pdf_bytes)
 
-    # 3. Check if extraction succeeded
-    if not extracted_raw or not isinstance(extracted_raw, dict) or not (extracted_raw.get("scenes") or extracted_raw.get("shoot_days")):
+    # 3. Check if extraction succeeded & normalize
+    normalized = None
+    if extracted_raw and isinstance(extracted_raw, dict):
+        try:
+            normalized = normalize_extracted_data(extracted_raw)
+        except Exception as norm_exc:  # noqa: BLE001
+            last_error_detail = f"NormalizationError: {norm_exc}"
+            logger.warning("Normalization failed for job %s: %s", job_id, norm_exc)
+
+    if not normalized or not normalized.get("scenes"):
         job["status"] = "failed"
         job["error"] = "We couldn't read this schedule. You can still enter it manually or via CSV."
-        logger.warning("Schedule extraction failed for job %s", job_id)
+        if last_error_detail:
+            logger.warning("Schedule extraction failed for job %s. Detail: %s", job_id, last_error_detail)
+            job["debug_error"] = last_error_detail
+        else:
+            logger.warning("Schedule extraction failed for job %s: no scenes could be parsed", job_id)
         return
 
-    # 4. Normalize extracted data
-    normalized = normalize_extracted_data(extracted_raw)
     job["extracted_data"] = normalized
 
-    # 5. Build preview summary
+    # 4. Build preview summary
     scenes = normalized.get("scenes", [])
     days = normalized.get("shoot_days", [])
     cast = normalized.get("cast", [])

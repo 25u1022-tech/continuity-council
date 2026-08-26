@@ -63,6 +63,11 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
   }, []);
 
   const handleSpeak = useCallback(async (msgId, text) => {
+    // Prevent duplicate in-flight requests
+    if (ttsStatus[msgId] === "loading") {
+      return;
+    }
+
     // If already playing this message, stop
     if (playingMsgId === msgId && audioRef.current) {
       audioRef.current.pause();
@@ -98,9 +103,9 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         return;
       }
 
-      // Poll for ready state (max 10s, every 500ms)
+      // Poll for ready state (max 25s, every 500ms)
       let attempts = 0;
-      const maxAttempts = 20;
+      const maxAttempts = 50;
       const poll = setInterval(async () => {
         attempts++;
         try {
@@ -128,7 +133,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
     } catch {
       setTtsStatus((prev) => ({ ...prev, [msgId]: "error" }));
     }
-  }, [playingMsgId, ttsAudioUrls]);
+  }, [playingMsgId, ttsAudioUrls, ttsStatus]);
 
   const scrollToBottom = () => {
     if (typeof messagesEndRef.current?.scrollIntoView === "function") {
@@ -291,7 +296,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                   <h3 className="text-[13.5px] font-semibold text-[var(--cc-text-primary)]">
                     Council Reasoning
                   </h3>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--cc-green-bg)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--cc-green-text)]">
+                  <span className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--cc-green-bg)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--cc-green-text)] border border-[var(--cc-green-text)]/15">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--cc-green-dot)] animate-pulse" />
                     MCP Live
                   </span>
@@ -427,29 +432,46 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                       data-testid={`tts-speak-btn-${msg.id}`}
                       onClick={() => handleSpeak(msg.id, msg.text)}
                       title={
-                        ttsStatus[msg.id] === "error"
-                          ? "Audio unavailable"
-                          : ttsStatus[msg.id] === "loading"
-                          ? "Generating audio…"
+                        ttsStatus[msg.id] === "loading"
+                          ? "Generating voice audio..."
+                          : ttsStatus[msg.id] === "error"
+                          ? "Audio generation failed (click to retry)"
                           : playingMsgId === msg.id
-                          ? "Stop playback"
-                          : "Listen to response"
+                          ? "Stop voice playback"
+                          : ttsAudioUrls[msg.id]
+                          ? "Play voice response"
+                          : "Listen to voice response"
                       }
-                      className={`inline-flex items-center justify-center h-4.5 w-4.5 rounded transition-colors ${
-                        ttsStatus[msg.id] === "error"
-                          ? "text-[var(--cc-text-quaternary)] cursor-not-allowed"
+                      aria-label={
+                        ttsStatus[msg.id] === "loading"
+                          ? "Generating voice audio"
+                          : ttsStatus[msg.id] === "error"
+                          ? "Audio generation failed"
                           : playingMsgId === msg.id
-                          ? "text-[var(--cc-btn-primary-bg)]"
+                          ? "Stop voice playback"
+                          : "Listen to voice response"
+                      }
+                      className={`inline-flex items-center justify-center h-4.5 w-4.5 rounded transition-all ${
+                        ttsStatus[msg.id] === "loading"
+                          ? "text-[var(--cc-btn-primary-bg)] cursor-wait"
+                          : ttsStatus[msg.id] === "error"
+                          ? "text-rose-500 hover:text-rose-600"
+                          : playingMsgId === msg.id
+                          ? "text-emerald-500"
+                          : ttsAudioUrls[msg.id]
+                          ? "text-[var(--cc-text-primary)] hover:text-emerald-500"
                           : "text-[var(--cc-text-tertiary)] hover:text-[var(--cc-text-primary)]"
                       }`}
                       disabled={ttsStatus[msg.id] === "loading"}
                     >
                       {ttsStatus[msg.id] === "loading" ? (
-                        <Loader2 size={10} className="animate-spin" />
+                        <Loader2 size={12} className="animate-spin text-[var(--cc-btn-primary-bg)]" />
                       ) : ttsStatus[msg.id] === "error" ? (
-                        <VolumeX size={10} />
+                        <VolumeX size={12} />
+                      ) : playingMsgId === msg.id ? (
+                        <Volume2 size={12} className="animate-pulse" />
                       ) : (
-                        <Volume2 size={10} />
+                        <Volume2 size={12} />
                       )}
                     </button>
                   )}
@@ -511,12 +533,12 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
                 onKeyDown={handleKeyDown}
                 placeholder="Ask me anything: I'm here to help…"
                 disabled={loading}
-                className="flex-1 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3.5 py-2 text-[12.5px] text-[var(--cc-text-primary)] placeholder-[var(--cc-text-quaternary)] focus:border-[var(--cc-text-primary)] focus:outline-none transition-colors"
+                className="flex-1 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3.5 py-2 text-[12.5px] text-[var(--cc-text-primary)] placeholder-[var(--cc-text-quaternary)] focus:border-[var(--cc-text-primary)] focus:outline-none transition-colors"
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--cc-btn-primary-bg)] text-[var(--cc-btn-primary-text)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shrink-0"
+                className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--cc-btn-primary-bg)] text-[var(--cc-btn-primary-text)] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shrink-0"
               >
                 <Send size={13} className="translate-x-[1px]" />
               </button>
@@ -540,7 +562,7 @@ export const CouncilChatbot = ({ productionId = "prod_001", caseId = null }) => 
         id="council-chatbot-fab"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-label={isOpen ? "Close Council Chat" : "Open Council Chat"}
-        className={`group relative flex h-12 w-12 items-center justify-center rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface-elevated)] text-[var(--cc-text-primary)] shadow-[var(--cc-shadow-lg)] hover:scale-105 active:scale-95 transition-all duration-150 backdrop-blur-md ${
+        className={`group relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[var(--cc-border)] bg-[var(--cc-surface-elevated)] text-[var(--cc-text-primary)] shadow-[var(--cc-shadow-lg)] hover:scale-105 active:scale-95 transition-all duration-150 backdrop-blur-md ${
           isOpen ? "ring-2 ring-[var(--cc-text-primary)]" : ""
         }`}
       >

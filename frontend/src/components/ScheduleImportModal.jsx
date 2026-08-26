@@ -11,18 +11,20 @@ import {
 } from "../lib/api";
 import {
   Upload, FileText, Loader2, CheckCircle2, AlertCircle, Sparkles,
-  Calendar, MapPin, Users, Film, ArrowRight, RefreshCw, X,
+  Calendar, MapPin, Users, Film, ArrowRight, RefreshCw, X, AlertTriangle,
 } from "lucide-react";
 
 export const ScheduleImportModal = ({
   open,
   onOpenChange,
   productionId,
+  currentSceneCount = 0,
   onImportComplete,
 }) => {
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [stage, setStage] = useState("idle"); // idle | uploading | processing | ready | confirming | success | failed
+  const [showConfirmWarning, setShowConfirmWarning] = useState(false);
   const [jobId, setJobId] = useState(null);
   const [preview, setPreview] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -40,6 +42,7 @@ export const ScheduleImportModal = ({
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setFile(null);
     setStage("idle");
+    setShowConfirmWarning(false);
     setJobId(null);
     setPreview(null);
     setErrorMsg("");
@@ -222,7 +225,7 @@ export const ScheduleImportModal = ({
                 Analyzing scenes, shoot days, cast breakdowns, and locations. This usually takes 5–15 seconds.
               </p>
               {file && (
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3 py-1 text-[12px] text-[var(--cc-text-tertiary)]">
+                <div className="mt-4 inline-flex items-center gap-2 rounded-[6px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] px-3 py-1 text-[12px] text-[var(--cc-text-tertiary)]">
                   <FileText size={13} />
                   <span>{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>
                 </div>
@@ -329,7 +332,7 @@ export const ScheduleImportModal = ({
                   </span>
                   <div className="flex flex-wrap gap-1">
                     {preview.sample_cast?.map((name, i) => (
-                      <span key={i} className="rounded-full bg-[var(--cc-surface-sunken)] border border-[var(--cc-border)] px-2 py-0.5 text-[11px] text-[var(--cc-text-secondary)]">
+                      <span key={i} className="rounded-[4px] bg-[var(--cc-surface-sunken)] border border-[var(--cc-border)] px-2 py-0.5 text-[11px] text-[var(--cc-text-secondary)]">
                         {name}
                       </span>
                     ))}
@@ -342,7 +345,7 @@ export const ScheduleImportModal = ({
                   </span>
                   <div className="flex flex-wrap gap-1">
                     {preview.sample_locations?.map((loc, i) => (
-                      <span key={i} className="rounded-full bg-[var(--cc-surface-sunken)] border border-[var(--cc-border)] px-2 py-0.5 text-[11px] text-[var(--cc-text-secondary)]">
+                      <span key={i} className="rounded-[4px] bg-[var(--cc-surface-sunken)] border border-[var(--cc-border)] px-2 py-0.5 text-[11px] text-[var(--cc-text-secondary)]">
                         {loc}
                       </span>
                     ))}
@@ -439,7 +442,7 @@ export const ScheduleImportModal = ({
               </Button>
               <Button
                 data-testid="confirm-schedule-import-btn"
-                onClick={handleConfirm}
+                onClick={() => setShowConfirmWarning(true)}
                 className="bg-[var(--cc-text-primary)] text-[var(--cc-canvas)] hover:bg-[var(--cc-text-primary)]/90 flex items-center gap-2"
               >
                 <span>Confirm import</span>
@@ -486,6 +489,49 @@ export const ScheduleImportModal = ({
           )}
         </div>
       </DialogContent>
+
+      {/* SEPARATE CONFIRMATION MODAL ON TOP */}
+      <Dialog open={showConfirmWarning} onOpenChange={setShowConfirmWarning}>
+        <DialogContent
+          data-testid="schedule-import-confirm-dialog"
+          className="max-w-md overflow-hidden rounded-[20px] border border-[var(--cc-border)] bg-[var(--cc-surface)] p-6 shadow-2xl text-[var(--cc-text-primary)]"
+        >
+          <div className="flex items-start gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--cc-accent-amber)]/15 text-[var(--cc-accent-amber)]">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <DialogTitle className="font-display text-[17px] font-semibold text-[var(--cc-text-primary)]">
+                Replace current production schedule?
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-[13px] leading-relaxed text-[var(--cc-text-secondary)]">
+                This will replace the current {currentSceneCount} {currentSceneCount === 1 ? "scene" : "scenes"} with {preview?.scenes_count || 0} new {preview?.scenes_count === 1 ? "scene" : "scenes"}. This action cannot be undone.
+              </DialogDescription>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <Button
+              data-testid="cancel-replace-schedule-btn"
+              variant="ghost"
+              onClick={() => setShowConfirmWarning(false)}
+              className="text-[13px] text-[var(--cc-text-secondary)]"
+            >
+              Cancel
+            </Button>
+            <Button
+              data-testid="confirm-replace-schedule-btn"
+              onClick={() => {
+                setShowConfirmWarning(false);
+                handleConfirm();
+              }}
+              className="bg-[var(--cc-text-primary)] text-[var(--cc-canvas)] hover:bg-[var(--cc-text-primary)]/90"
+            >
+              Confirm replacement
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

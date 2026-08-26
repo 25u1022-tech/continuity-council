@@ -23,7 +23,7 @@ export class ErrorBoundary extends React.Component {
 
   handleReset = () => {
     safeStorage.removeItem("cc_active_case");
-    window.location.href = "/";
+    window.location.href = "/dashboard";
   };
 
   render() {

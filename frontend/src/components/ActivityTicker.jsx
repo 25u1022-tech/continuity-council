@@ -34,7 +34,7 @@ export const ActivityTicker = () => {
   return (
     <div
       data-testid="mcp-activity-ticker"
-      className="hidden min-w-0 items-center gap-2 rounded-full border border-[var(--cc-border)] bg-[var(--cc-surface)] px-3 py-1 lg:flex shadow-sm"
+      className="hidden min-w-0 items-center gap-2 rounded-[7px] border border-[var(--cc-border)] bg-[var(--cc-surface)] px-3 py-1 lg:flex shadow-sm"
       title={event ? `${event.source} · ${event.label}` : "ClickHouse activity"}
     >
       <span
