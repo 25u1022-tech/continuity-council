@@ -165,7 +165,7 @@ $$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavin
 4. **Live Multi-Agent Investigation**:
    Watch agents evaluate candidate slates in parallel, querying ClickHouse historical evidence via FastMCP.
 5. **Review Ranked Recovery Strategies**:
-   Compare grounded options with plain-English justifications, cost breakdowns, weather summaries, and on-demand **Imagen 3 visual mood-boards** for alternate locations.
+   Compare grounded options with plain-English justifications, cost breakdowns, weather summaries, and on-demand **Gemini native visual mood-boards** for alternate locations.
 6. **Producer Approval**:
    Select and approve the preferred strategy.
 7. **Immutable Audit Commit**:
@@ -180,7 +180,7 @@ $$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavin
 | **Database** | **ClickHouse Cloud** | `clickhouse-connect` (v1.7.1) + official **`mcp-clickhouse`** (v0.4.1) FastMCP stdio server |
 | **Agent Framework** | **Google ADK** | `google-adk` (v2.7.1) with `SequentialAgent`, `ParallelAgent`, `Runner`, and `FunctionTool` |
 | **AI / LLM** | **Google Gemini** | `gemini-3.6-flash` via official `google-genai` SDK with resilient backoff & JSON repair |
-| **Visual AI** | **Google Imagen 3** | `imagen-3.0-generate-002` on-demand 16:9 cinematic mood-boards with dual cache |
+| **Visual AI** | **Google Gemini Image** | Gemini native image generation (Imagen 3 available via Vertex AI when provisioned) on-demand 16:9 cinematic mood-boards with dual cache |
 | **Voice AI / TTS** | **Google Gemini TTS** | `gemini-3.1-flash-tts` speech synthesis with in-memory hash cache |
 | **Backend API** | **FastAPI + Python 3.11** | Async ASGI server with Pydantic v2 domain schemas |
 | **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface |
@@ -198,15 +198,12 @@ continuity-council/
 │   ├── server.py                  # API routes, middleware, SPA static handler, startup lifecycle
 │   ├── models.py                  # Pydantic v2 domain schemas (CaseState, RecoveryOption, etc.)
 │   ├── case_store.py              # In-memory thread-safe active case registry
-│   ├── scoring.py                 # TRD weighted scoring formula implementation
-│   ├── pytest.ini                 # Pytest configuration with fixed xdist workers
-│   ├── requirements.txt           # Pinned production dependencies (ADK, Gemini, ClickHouse, MCP)
-│   ├── agents/                    # Council agents
-│   │   ├── orchestrator.py        # ADK SequentialAgent + ParallelAgent + Runner investigation pipeline
-│   │   ├── budget_sentinel.py     # MCP historical query engine + rate-card calibration
-│   │   ├── continuity_memory.py   # Narrative sequence DAG & wardrobe continuity solver
-│   │   ├── compliance.py          # Availability, permits, and 100mi transit rule validator
-│   │   ├── schedule_optimizer.py  # Candidate option generator + description polisher
+│   ├── agents/                    # Specialized Google ADK recovery council agents
+│   │   ├── orchestrator.py        # ADK Sequential & Parallel composite pipeline
+│   │   ├── impact_analyzer.py     # Deterministic scene graph impact evaluator
+│   │   ├── schedule_optimizer.py  # Fast search solver for candidate permutations
+│   │   ├── budget_sentinel.py     # ClickHouse FastMCP historical rate-card estimator
+│   │   ├── compliance_agent.py    # Haversine distance, union turnarounds, overtime rules
 │   │   ├── auditor.py             # ClickHouse immutable decision ledger writer
 │   │   └── council_chatbot.py     # Gemini function-calling conversational reasoning agent
 │   ├── services/                  # Supporting service modules
@@ -216,15 +213,12 @@ continuity-council/
 │   │   ├── gemini_client.py       # Resilient Gemini wrapper with quota recovery
 │   │   ├── justification_service.py # Natural-language explainability justifications
 │   │   ├── schedule_extractor.py  # PDF shooting-schedule ingestion via Gemini
-│   │   ├── moodboard_service.py   # Imagen 3 location visual mood-board generator
+│   │   ├── moodboard_service.py   # Gemini native visual mood-board generator (Imagen 3 available via Vertex AI when provisioned)
 │   │   ├── tts_service.py         # Gemini TTS speech synthesis service
 │   │   ├── nl_parser.py           # Natural-language disruption parser
 │   │   ├── geo_service.py         # Haversine distance, city tiers, and World Bank PPP factors
 │   │   ├── weather_service.py     # Open-Meteo forecast API integration
 │   │   └── finance_service.py     # Frankfurter / ECB live foreign exchange conversion
-│   └── scripts/                   # Verification harnesses & proof scripts
-│       ├── test_orchestrator_adk.py # ADK multi-agent investigation verification
-│       └── test_budget_sentinel_adk.py # Budget Sentinel MCP ADK test
 ├── clickhouse/                    # ClickHouse SQL schema and seed scripts
 │   ├── schema.sql                 # 10 tables + strategy_performance_mv materialized view
 │   ├── seed.py                    # Seeds 6 demo productions + 200,000+ synthetic disruptions
@@ -345,7 +339,7 @@ All backend API routes are served under the `/api` prefix:
 | `POST /api/disruptions` | Report disruption | Dispatches background ADK `Runner.run_async` multi-agent investigation |
 | `GET /api/cases/{case_id}` | Live investigation polling | Real-time agent statuses, MCP call logs, ranked options, and rationale |
 | `POST /api/cases/{case_id}/approve` | Producer approval | Triggers `Auditor` agent to append immutable record to ClickHouse |
-| `GET /api/locations/{id}/moodboard` | Location mood-board | On-demand Imagen 3 cinematic visual mood-board generation |
+| `GET /api/locations/{id}/moodboard` | Location mood-board | On-demand Gemini native image generation (Imagen 3 available via Vertex AI when provisioned) |
 | `POST /api/chat` | Council Reasoning Chat | Gemini function-calling agent with ClickHouse source citations |
 | `POST /api/chat/tts/generate` | Generate TTS audio | Asynchronously generates speech audio via Gemini TTS |
 | `GET /api/chat/tts` | Retrieve TTS audio | Streams cached audio stream (`audio/wav`) |

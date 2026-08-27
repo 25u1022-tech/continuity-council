@@ -58,7 +58,7 @@ export function LocationMoodboardModal({ open, onOpenChange, locationId, locatio
         <DialogHeader className="border-b border-[var(--cc-border)] px-6 pt-5 pb-4">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--cc-text-tertiary)]">
             <Sparkles size={12} className="text-[var(--cc-yellow-dot)]" />
-            <span>AI Mood-Board Preview (Imagen 3)</span>
+            <span>AI Mood-Board Preview (Gemini)</span>
           </div>
           <DialogTitle className="font-display mt-1 text-[20px] font-semibold text-[var(--cc-text-primary)]">
             {displayLocName}
@@ -76,7 +76,7 @@ export function LocationMoodboardModal({ open, onOpenChange, locationId, locatio
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center p-4">
                   <Sparkles size={24} className="animate-spin text-[var(--cc-yellow-dot)]" />
                   <p className="text-[13px] font-medium text-[var(--cc-text-primary)]">
-                    Generating cinematic still with Imagen 3...
+                    Generating cinematic still with Gemini image generation...
                   </p>
                   <p className="text-[11px] text-[var(--cc-text-tertiary)]">
                     Calibrating volumetric lighting and location metadata
@@ -91,12 +91,12 @@ export function LocationMoodboardModal({ open, onOpenChange, locationId, locatio
               <div className="relative aspect-video w-full overflow-hidden rounded-[12px] border border-[var(--cc-border)] bg-black shadow-inner">
                 <img
                   src={`data:image/jpeg;base64,${moodboard.image_base64}`}
-                  alt={`AI-generated preview (Imagen 3): ${displayLocName}`}
+                  alt={`AI-generated preview (Gemini image generation) — ${displayLocName}`}
                   data-testid="moodboard-image"
                   className="h-full w-full object-cover transition-opacity duration-300"
                 />
                 <div className="absolute bottom-2.5 left-2.5 rounded-[6px] bg-black/60 backdrop-blur-md border border-white/10 px-2.5 py-1 text-[10.5px] font-medium text-white/90">
-                  AI-generated preview (Imagen 3): {displayLocName}
+                  AI-generated preview (Gemini image generation) — {displayLocName}
                 </div>
                 {moodboard.cached && (
                   <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-[6px] bg-black/60 backdrop-blur-md border border-white/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
@@ -138,7 +138,7 @@ export function LocationMoodboardModal({ open, onOpenChange, locationId, locatio
                 Visual preview currently unavailable
               </h4>
               <p className="mt-1 text-[12.5px] text-[var(--cc-text-secondary)]">
-                We couldn't generate an Imagen 3 preview right now. You can still select and execute this recovery option.
+                We couldn't generate a visual preview right now. You can still select and execute this recovery option.
               </p>
             </div>
           )}

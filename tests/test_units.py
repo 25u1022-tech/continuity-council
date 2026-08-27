@@ -2133,7 +2133,7 @@ class TestSchedulePDFExtractor:
 
 
 class TestMoodboardService:
-    """Unit and endpoint tests for Imagen 3 location mood-boards."""
+    """Unit and endpoint tests for Gemini native & Imagen location mood-boards."""
 
     def test_build_prompt(self):
         from services.moodboard_service import build_prompt
@@ -2155,7 +2155,63 @@ class TestMoodboardService:
         assert "35mm" in prompt
         assert "No text" in prompt
 
-    def test_generate_moodboard_success_and_cache(self):
+    def test_generate_moodboard_gemini_success_and_cache(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from services import moodboard_service
+
+        fake_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb"
+        
+        # Build mock Gemini generate_content response with inline_data
+        mock_response = MagicMock()
+        mock_cand = MagicMock()
+        mock_part = MagicMock()
+        mock_part.inline_data.data = fake_bytes
+        mock_part.inline_data.mime_type = "image/jpeg"
+        mock_cand.content.parts = [mock_part]
+        mock_response.candidates = [mock_cand]
+
+        # Clear caches for test isolation
+        moodboard_service._MEMORY_CACHE.clear()
+        (moodboard_service.CACHE_DIR / "loc_test_001.json").unlink(missing_ok=True)
+
+        with patch.dict("os.environ", {"MOODBOARD_BACKEND": "gemini"}), \
+             patch("services.gemini_client.is_configured", return_value=True), \
+             patch("services.gemini_client.quota_hit", return_value=False), \
+             patch("services.gemini_client._get_client") as mock_get_client:
+            
+            mock_client = MagicMock()
+            mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+
+            # 1. First call -> generates image via Gemini native path
+            res1 = asyncio.run(
+                moodboard_service.generate_moodboard(
+                    location_id="loc_test_001",
+                    location={"name": "Test Stage A", "location_type": "interior"},
+                )
+            )
+            assert res1 is not None
+            assert res1["status"] == "ready"
+            assert res1["cached"] is False
+            assert res1["location_name"] == "Test Stage A"
+            assert len(res1["image_base64"]) > 0
+            assert mock_client.aio.models.generate_content.call_count == 1
+
+            # 2. Second call -> served from cache without calling Gemini again
+            res2 = asyncio.run(
+                moodboard_service.generate_moodboard(
+                    location_id="loc_test_001",
+                    location={"name": "Test Stage A", "location_type": "interior"},
+                )
+            )
+            assert res2 is not None
+            assert res2["status"] == "ready"
+            assert res2["cached"] is True
+            # Zero new model calls
+            assert mock_client.aio.models.generate_content.call_count == 1
+
+    def test_generate_moodboard_imagen_backend(self):
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
         from services import moodboard_service
@@ -2168,9 +2224,10 @@ class TestMoodboardService:
 
         # Clear caches for test isolation
         moodboard_service._MEMORY_CACHE.clear()
-        (moodboard_service.CACHE_DIR / "loc_test_001.json").unlink(missing_ok=True)
+        (moodboard_service.CACHE_DIR / "loc_test_img_001.json").unlink(missing_ok=True)
 
-        with patch("services.gemini_client.is_configured", return_value=True), \
+        with patch.dict("os.environ", {"MOODBOARD_BACKEND": "imagen"}), \
+             patch("services.gemini_client.is_configured", return_value=True), \
              patch("services.gemini_client.quota_hit", return_value=False), \
              patch("services.gemini_client._get_client") as mock_get_client:
             
@@ -2178,31 +2235,17 @@ class TestMoodboardService:
             mock_client.aio.models.generate_images = AsyncMock(return_value=mock_response)
             mock_get_client.return_value = mock_client
 
-            # 1. First call -> generates image
-            res1 = asyncio.run(
+            res = asyncio.run(
                 moodboard_service.generate_moodboard(
-                    location_id="loc_test_001",
-                    location={"name": "Test Stage A", "location_type": "interior"},
+                    location_id="loc_test_img_001",
+                    location={"name": "Test Stage Imagen", "location_type": "interior"},
                 )
             )
-            assert res1 is not None
-            assert res1["status"] == "ready"
-            assert res1["cached"] is False
-            assert res1["location_name"] == "Test Stage A"
-            assert len(res1["image_base64"]) > 0
-            assert mock_client.aio.models.generate_images.call_count == 1
-
-            # 2. Second call -> served from cache without calling Imagen again
-            res2 = asyncio.run(
-                moodboard_service.generate_moodboard(
-                    location_id="loc_test_001",
-                    location={"name": "Test Stage A", "location_type": "interior"},
-                )
-            )
-            assert res2 is not None
-            assert res2["status"] == "ready"
-            assert res2["cached"] is True
-            # Zero new Imagen calls
+            assert res is not None
+            assert res["status"] == "ready"
+            assert res["cached"] is False
+            assert res["location_name"] == "Test Stage Imagen"
+            assert len(res["image_base64"]) > 0
             assert mock_client.aio.models.generate_images.call_count == 1
 
     def test_moodboard_endpoint_failure_returns_202(self):
@@ -2259,7 +2302,7 @@ class TestMoodboardService:
             except Exception:
                 pass
 
-            # CRITICAL CONSTRAINT: ZERO IMAGEN CALLS DURING INVESTIGATION
+            # CRITICAL CONSTRAINT: ZERO IMAGEN / MOODBOARD CALLS DURING INVESTIGATION
             assert mock_mb.call_count == 0
 
 

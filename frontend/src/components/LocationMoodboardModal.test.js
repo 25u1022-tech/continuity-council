@@ -78,6 +78,7 @@ describe("LocationMoodboardModal", () => {
     expect(img).not.toBeNull();
     expect(img.getAttribute("src")).toContain("fakebase64imagebytes==");
     expect(modal.textContent).toContain("Harbor Pier 7 Exterior");
+    expect(modal.textContent).toContain("AI-generated preview (Gemini image generation) — Harbor Pier 7 Exterior");
     expect(modal.textContent).toContain("Cached");
   });
 

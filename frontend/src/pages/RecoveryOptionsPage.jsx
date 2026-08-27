@@ -321,7 +321,7 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
 
       {/* Live Signals & Actions Strip */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {/* Imagen 3 Moodboard Preview Button for Location Moves */}
+        {/* Moodboard Preview Button for Location Moves */}
         {isLocationSwap && onPreviewLocation && (
           <button
             type="button"
@@ -336,7 +336,7 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
             className="flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-2.5 py-1 text-[11px] font-medium text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)] hover:border-[var(--cc-text-primary)]/40 transition-all shadow-sm"
           >
             <Sparkles size={11} className="text-[var(--cc-yellow-dot)]" />
-            <span>Preview look (Imagen 3)</span>
+            <span>Preview look</span>
           </button>
         )}
 

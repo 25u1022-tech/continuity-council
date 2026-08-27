@@ -1,8 +1,9 @@
-"""Imagen 3 Mood-Board Service.
+"""Dual-Backend Mood-Board Service (Gemini Native Image & Imagen 3).
 
 Provides on-demand cinematic visual previews for alternate locations:
 - Generates rich film-still prompts from location & scene attributes
-- Native Google GenAI SDK Imagen 3 generation (`imagen-3.0-generate-002`)
+- Default: Gemini native multimodal image generation (`gemini-2.5-flash-image`, `gemini-2.0-flash-preview-image-generation`)
+- Optional: Native Google GenAI SDK Imagen 3 generation (`imagen-3.0-generate-002`) via `MOODBOARD_BACKEND=imagen`
 - 24-hour dual-tier cache (in-memory LRU + disk cache)
 - Strict 8-second hard timeout; zero overhead on recovery investigation SLA
 - Graceful 202 "unavailable" fallback on quota exhaustion or error
@@ -16,18 +17,31 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from services import clickhouse_client, gemini_client
 
 logger = logging.getLogger("continuity.moodboard")
 
+MOODBOARD_BACKEND = os.getenv("MOODBOARD_BACKEND", "gemini").lower().strip()
 DEFAULT_IMAGEN_MODEL = os.getenv("IMAGEN_MODEL", "imagen-3.0-generate-002")
+DEFAULT_GEMINI_IMAGE_MODELS = ["gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation"]
 CACHE_TTL_SECONDS = 24 * 3600  # 24 hours
 CACHE_DIR = Path(__file__).parent.parent / ".cache" / "moodboards"
 
 # In-memory LRU cache: location_id -> {image_base64, prompt, location_name, created_at, expires_at}
 _MEMORY_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _get_gemini_image_models() -> List[str]:
+    custom_model = os.getenv("GEMINI_IMAGE_MODEL", "").strip()
+    models: List[str] = []
+    if custom_model:
+        models.append(custom_model)
+    for m in DEFAULT_GEMINI_IMAGE_MODELS:
+        if m not in models:
+            models.append(m)
+    return models
 
 
 def _ensure_cache_dir() -> None:
@@ -126,7 +140,11 @@ async def generate_moodboard(
     scene: Optional[Dict[str, Any]] = None,
     timeout: float = 8.0,
 ) -> Optional[Dict[str, Any]]:
-    """Generate or retrieve a cached Imagen 3 moodboard image for a location.
+    """Generate or retrieve a cached moodboard image for a location.
+
+    Supports dual backends via MOODBOARD_BACKEND:
+      - "gemini" (default): Gemini native image generation models
+      - "imagen": Imagen 3 image generation models
 
     Returns:
         Dict with keys: {image_base64, prompt, location_name, cached: bool} or None on failure.
@@ -164,63 +182,156 @@ async def generate_moodboard(
         logger.warning("Gemini / Imagen API unavailable or quota active for moodboard generation")
         return None
 
-    # 4. Generate with Imagen 3 via Google GenAI SDK (8s hard timeout)
-    logger.info("Generating Imagen 3 moodboard for location %s (model: %s)", location_id, DEFAULT_IMAGEN_MODEL)
-    try:
-        from google.genai import types
+    backend = os.getenv("MOODBOARD_BACKEND", MOODBOARD_BACKEND).lower().strip()
 
-        client = gemini_client._get_client()
+    # 4. Imagen backend path (UNTOUCHED Imagen 3 code when MOODBOARD_BACKEND=imagen)
+    if backend == "imagen":
+        logger.info("Generating Imagen 3 moodboard for location %s (model: %s)", location_id, DEFAULT_IMAGEN_MODEL)
+        try:
+            from google.genai import types
 
-        # Call Imagen generation asynchronously
-        response = await asyncio.wait_for(
-            client.aio.models.generate_images(
-                model=DEFAULT_IMAGEN_MODEL,
-                prompt=prompt,
-                config=types.GenerateImagesConfig(
-                    number_of_images=1,
-                    output_mime_type="image/jpeg",
-                    aspect_ratio="16:9",
+            client = gemini_client._get_client()
+
+            # Call Imagen generation asynchronously
+            response = await asyncio.wait_for(
+                client.aio.models.generate_images(
+                    model=DEFAULT_IMAGEN_MODEL,
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        output_mime_type="image/jpeg",
+                        aspect_ratio="16:9",
+                    ),
                 ),
-            ),
-            timeout=timeout,
-        )
+                timeout=timeout,
+            )
 
-        if not response or not getattr(response, "generated_images", None):
-            logger.warning("Imagen returned empty generated_images list for %s", location_id)
+            if not response or not getattr(response, "generated_images", None):
+                logger.warning("Imagen returned empty generated_images list for %s", location_id)
+                return None
+
+            first_img = response.generated_images[0]
+            raw_bytes = first_img.image.image_bytes
+            if not raw_bytes:
+                logger.warning("Imagen generated image contained no bytes for %s", location_id)
+                return None
+
+            b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+
+            # 5. Cache the generated image
+            now = time.time()
+            entry = {
+                "location_id": location_id,
+                "location_name": location_name,
+                "image_base64": b64_str,
+                "prompt": prompt,
+                "created_at": now,
+                "expires_at": now + CACHE_TTL_SECONDS,
+            }
+            _save_to_cache(location_id, entry)
+
+            return {
+                "status": "ready",
+                "location_id": location_id,
+                "location_name": location_name,
+                "image_base64": b64_str,
+                "prompt": prompt,
+                "cached": False,
+            }
+
+        except asyncio.TimeoutError:
+            logger.warning("Imagen 3 generation timed out after %.1fs for location %s", timeout, location_id)
+            return None
+        except Exception as exc:
+            logger.warning("Imagen 3 generation failed for location %s: %s", location_id, exc)
             return None
 
-        first_img = response.generated_images[0]
-        raw_bytes = first_img.image.image_bytes
-        if not raw_bytes:
-            logger.warning("Imagen generated image contained no bytes for %s", location_id)
+    # 5. Gemini native image backend path (default)
+    elif backend == "gemini":
+        logger.info("Generating Gemini native moodboard for location %s", location_id)
+        start_time = time.time()
+        try:
+            from google.genai import types
+
+            client = gemini_client._get_client()
+            candidate_models = _get_gemini_image_models()
+
+            for model_name in candidate_models:
+                elapsed_so_far = time.time() - start_time
+                remaining_timeout = timeout - elapsed_so_far
+                if remaining_timeout <= 0.5:
+                    logger.warning("Remaining timeout (%.2fs) exhausted before trying model %s", remaining_timeout, model_name)
+                    break
+
+                try:
+                    logger.info("Attempting Gemini native image generation with model %s for %s", model_name, location_id)
+                    response = await asyncio.wait_for(
+                        client.aio.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_modalities=["TEXT", "IMAGE"],
+                            ),
+                        ),
+                        timeout=remaining_timeout,
+                    )
+
+                    b64_str = None
+                    if response and getattr(response, "candidates", None):
+                        for cand in response.candidates:
+                            content = getattr(cand, "content", None)
+                            parts = getattr(content, "parts", None) if content else []
+                            for part in (parts or []):
+                                inline_data = getattr(part, "inline_data", None)
+                                if inline_data and getattr(inline_data, "data", None):
+                                    raw_data = inline_data.data
+                                    if isinstance(raw_data, bytes):
+                                        b64_str = base64.b64encode(raw_data).decode("utf-8")
+                                    elif isinstance(raw_data, str):
+                                        b64_str = raw_data
+                                    if b64_str:
+                                        break
+                            if b64_str:
+                                break
+
+                    if b64_str:
+                        logger.info("Gemini native image successfully generated with model %s for %s", model_name, location_id)
+                        now = time.time()
+                        entry = {
+                            "location_id": location_id,
+                            "location_name": location_name,
+                            "image_base64": b64_str,
+                            "prompt": prompt,
+                            "model": model_name,
+                            "created_at": now,
+                            "expires_at": now + CACHE_TTL_SECONDS,
+                        }
+                        _save_to_cache(location_id, entry)
+
+                        return {
+                            "status": "ready",
+                            "location_id": location_id,
+                            "location_name": location_name,
+                            "image_base64": b64_str,
+                            "prompt": prompt,
+                            "cached": False,
+                        }
+
+                    logger.warning("Gemini model %s returned no inline_data image for %s", model_name, location_id)
+
+                except asyncio.TimeoutError:
+                    logger.warning("Gemini model %s timed out for location %s", model_name, location_id)
+                    return None
+                except Exception as exc:
+                    logger.warning("Gemini model %s generation failed for %s: %s", model_name, location_id, exc)
+                    continue
+
+            logger.warning("All Gemini native image models exhausted for location %s", location_id)
             return None
 
-        b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-
-        # 5. Cache the generated image
-        now = time.time()
-        entry = {
-            "location_id": location_id,
-            "location_name": location_name,
-            "image_base64": b64_str,
-            "prompt": prompt,
-            "created_at": now,
-            "expires_at": now + CACHE_TTL_SECONDS,
-        }
-        _save_to_cache(location_id, entry)
-
-        return {
-            "status": "ready",
-            "location_id": location_id,
-            "location_name": location_name,
-            "image_base64": b64_str,
-            "prompt": prompt,
-            "cached": False,
-        }
-
-    except asyncio.TimeoutError:
-        logger.warning("Imagen 3 generation timed out after %.1fs for location %s", timeout, location_id)
-        return None
-    except Exception as exc:
-        logger.warning("Imagen 3 generation failed for location %s: %s", location_id, exc)
+        except Exception as exc:
+            logger.warning("Gemini native image generation failed for location %s: %s", location_id, exc)
+            return None
+    else:
+        logger.warning("Unknown moodboard backend '%s'; returning None", backend)
         return None
