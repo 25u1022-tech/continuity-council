@@ -7,6 +7,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock("../lib/api", () => ({
   getLocationMoodboard: jest.fn(),
+  getLocationMoodboardImageUrl: jest.fn((id) => `/api/locations/${id}/moodboard/image`),
 }));
 
 describe("LocationMoodboardModal", () => {
@@ -42,11 +43,12 @@ describe("LocationMoodboardModal", () => {
     expect(api.getLocationMoodboard).not.toHaveBeenCalled();
   });
 
-  it("renders image and caption on ready response", async () => {
+  it("renders image with URL src and caption on ready response", async () => {
     api.getLocationMoodboard.mockResolvedValueOnce({
       status: "ready",
       location_id: "loc_002",
       location_name: "Harbor Pier 7 Exterior",
+      image_url: "/api/locations/loc_002/moodboard/image",
       image_base64: "fakebase64imagebytes==",
       prompt: "Cinematic film still, 35mm motion picture photography...",
       cached: true,
@@ -76,17 +78,55 @@ describe("LocationMoodboardModal", () => {
 
     const img = document.querySelector('[data-testid="moodboard-image"]');
     expect(img).not.toBeNull();
-    expect(img.getAttribute("src")).toContain("fakebase64imagebytes==");
+    const srcVal = img.getAttribute("src") || img.src;
+    expect(srcVal).toContain("/api/locations/loc_002/moodboard/image");
     expect(modal.textContent).toContain("Harbor Pier 7 Exterior");
     expect(modal.textContent).toContain("AI-generated preview (Gemini image generation) — Harbor Pier 7 Exterior");
     expect(modal.textContent).toContain("Cached");
+  });
+
+  it("renders graceful fallback card on img onError event", async () => {
+    api.getLocationMoodboard.mockResolvedValueOnce({
+      status: "ready",
+      location_id: "loc_002",
+      location_name: "Harbor Pier 7 Exterior",
+      image_url: "/api/locations/loc_002/moodboard/image",
+      cached: false,
+    });
+
+    await act(async () => {
+      root.render(
+        <LocationMoodboardModal
+          open={true}
+          onOpenChange={jest.fn()}
+          locationId="loc_002"
+          locationName="Harbor Pier 7 Exterior"
+        />
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const img = document.querySelector('[data-testid="moodboard-image"]');
+    expect(img).not.toBeNull();
+
+    // Trigger image error
+    await act(async () => {
+      img.dispatchEvent(new Event("error"));
+    });
+
+    const unavailableState = document.querySelector('[data-testid="moodboard-unavailable-state"]');
+    expect(unavailableState).not.toBeNull();
+    expect(unavailableState.textContent).toContain("Visual preview currently unavailable");
   });
 
   it("renders graceful fallback card on failure or unavailable status", async () => {
     api.getLocationMoodboard.mockResolvedValueOnce({
       status: "unavailable",
       location_id: "loc_002",
-      detail: "Imagen 3 generation quota exceeded.",
+      detail: "Generation unavailable.",
     });
 
     await act(async () => {

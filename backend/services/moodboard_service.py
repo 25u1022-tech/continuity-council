@@ -5,6 +5,7 @@ Provides on-demand cinematic visual previews for alternate locations:
 - Default: Gemini native multimodal image generation (`gemini-2.5-flash-image`, `gemini-2.0-flash-preview-image-generation`)
 - Optional: Native Google GenAI SDK Imagen 3 generation (`imagen-3.0-generate-002`) via `MOODBOARD_BACKEND=imagen`
 - 24-hour dual-tier cache (in-memory LRU + disk cache)
+- Serves both metadata JSON and direct binary image bytes (`/api/locations/{id}/moodboard/image`)
 - Strict 8-second hard timeout; zero overhead on recovery investigation SLA
 - Graceful 202 "unavailable" fallback on quota exhaustion or error
 """
@@ -29,7 +30,7 @@ DEFAULT_GEMINI_IMAGE_MODELS = ["gemini-2.5-flash-image", "gemini-2.0-flash-previ
 CACHE_TTL_SECONDS = 24 * 3600  # 24 hours
 CACHE_DIR = Path(__file__).parent.parent / ".cache" / "moodboards"
 
-# In-memory LRU cache: location_id -> {image_base64, prompt, location_name, created_at, expires_at}
+# In-memory LRU cache: location_id -> {image_base64, mime, prompt, location_name, created_at, expires_at}
 _MEMORY_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
@@ -49,6 +50,22 @@ def _ensure_cache_dir() -> None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
         logger.debug("Could not create disk cache dir: %s", exc)
+
+
+def purge_cache(location_id: Optional[str] = None) -> None:
+    """Purge memory and disk cache entries (all or specific location)."""
+    global _MEMORY_CACHE
+    _ensure_cache_dir()
+    if location_id:
+        _MEMORY_CACHE.pop(location_id, None)
+        (CACHE_DIR / f"{location_id}.json").unlink(missing_ok=True)
+    else:
+        _MEMORY_CACHE.clear()
+        for f in CACHE_DIR.glob("*.json"):
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def build_prompt(
@@ -147,7 +164,7 @@ async def generate_moodboard(
       - "imagen": Imagen 3 image generation models
 
     Returns:
-        Dict with keys: {image_base64, prompt, location_name, cached: bool} or None on failure.
+        Dict with keys: {status, location_id, location_name, image_url, image_base64, mime, prompt, cached: bool} or None on failure.
     """
     # 1. Check cache first
     cached_entry = _get_from_cache(location_id)
@@ -157,7 +174,9 @@ async def generate_moodboard(
             "status": "ready",
             "location_id": location_id,
             "location_name": cached_entry.get("location_name", "Location"),
+            "image_url": f"/api/locations/{location_id}/moodboard/image",
             "image_base64": cached_entry.get("image_base64", ""),
+            "mime": cached_entry.get("mime", "image/jpeg"),
             "prompt": cached_entry.get("prompt", ""),
             "cached": True,
         }
@@ -217,6 +236,7 @@ async def generate_moodboard(
                 return None
 
             b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+            mime_type = "image/jpeg"
 
             # 5. Cache the generated image
             now = time.time()
@@ -224,6 +244,7 @@ async def generate_moodboard(
                 "location_id": location_id,
                 "location_name": location_name,
                 "image_base64": b64_str,
+                "mime": mime_type,
                 "prompt": prompt,
                 "created_at": now,
                 "expires_at": now + CACHE_TTL_SECONDS,
@@ -234,7 +255,9 @@ async def generate_moodboard(
                 "status": "ready",
                 "location_id": location_id,
                 "location_name": location_name,
+                "image_url": f"/api/locations/{location_id}/moodboard/image",
                 "image_base64": b64_str,
+                "mime": mime_type,
                 "prompt": prompt,
                 "cached": False,
             }
@@ -277,6 +300,7 @@ async def generate_moodboard(
                     )
 
                     b64_str = None
+                    mime_type = "image/jpeg"
                     if response and getattr(response, "candidates", None):
                         for cand in response.candidates:
                             content = getattr(cand, "content", None)
@@ -289,18 +313,21 @@ async def generate_moodboard(
                                         b64_str = base64.b64encode(raw_data).decode("utf-8")
                                     elif isinstance(raw_data, str):
                                         b64_str = raw_data
+                                    if getattr(inline_data, "mime_type", None):
+                                        mime_type = inline_data.mime_type
                                     if b64_str:
                                         break
                             if b64_str:
                                 break
 
                     if b64_str:
-                        logger.info("Gemini native image successfully generated with model %s for %s", model_name, location_id)
+                        logger.info("Gemini native image successfully generated with model %s for %s (mime: %s)", model_name, location_id, mime_type)
                         now = time.time()
                         entry = {
                             "location_id": location_id,
                             "location_name": location_name,
                             "image_base64": b64_str,
+                            "mime": mime_type,
                             "prompt": prompt,
                             "model": model_name,
                             "created_at": now,
@@ -312,7 +339,9 @@ async def generate_moodboard(
                             "status": "ready",
                             "location_id": location_id,
                             "location_name": location_name,
+                            "image_url": f"/api/locations/{location_id}/moodboard/image",
                             "image_base64": b64_str,
+                            "mime": mime_type,
                             "prompt": prompt,
                             "cached": False,
                         }
@@ -335,3 +364,34 @@ async def generate_moodboard(
     else:
         logger.warning("Unknown moodboard backend '%s'; returning None", backend)
         return None
+
+
+async def get_or_generate_moodboard_image(
+    location_id: str,
+    timeout: float = 8.0,
+) -> Optional[Tuple[bytes, str]]:
+    """Retrieve raw image bytes and mime type for a location from cache, or generate on-demand.
+
+    Returns:
+        Tuple of (image_bytes, mime_type) or None if unavailable.
+    """
+    cached = _get_from_cache(location_id)
+    if cached and cached.get("image_base64"):
+        try:
+            raw_bytes = base64.b64decode(cached["image_base64"])
+            mime = cached.get("mime") or "image/jpeg"
+            return raw_bytes, mime
+        except Exception as exc:
+            logger.warning("Failed to decode cached image for %s: %s", location_id, exc)
+
+    # If not cached, attempt on-demand generation
+    res = await generate_moodboard(location_id=location_id, timeout=timeout)
+    if res and res.get("image_base64"):
+        try:
+            raw_bytes = base64.b64decode(res["image_base64"])
+            mime = res.get("mime") or "image/jpeg"
+            return raw_bytes, mime
+        except Exception as exc:
+            logger.warning("Failed to decode generated image for %s: %s", location_id, exc)
+
+    return None

@@ -322,6 +322,7 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
       {/* Live Signals & Actions Strip */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {/* Moodboard Preview Button for Location Moves */}
+        {/* MOODBOARD HIDDEN — key lacks image-model access
         {isLocationSwap && onPreviewLocation && (
           <button
             type="button"
@@ -339,6 +340,7 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
             <span>Preview look</span>
           </button>
         )}
+        */}
 
         {option.weather_summary && (
           <div className="flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-2.5 py-1 text-[11px] text-[var(--cc-text-secondary)] shadow-sm">

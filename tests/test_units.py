@@ -2265,6 +2265,64 @@ class TestMoodboardService:
             assert data["location_id"] == "loc_unavailable_001"
             assert "unavailable" in data["detail"].lower()
 
+    def test_cache_store_load_roundtrip(self):
+        import time
+        from services import moodboard_service
+
+        loc_id = "loc_roundtrip_test"
+        entry = {
+            "location_id": loc_id,
+            "location_name": "Roundtrip Test Stage",
+            "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+            "mime": "image/png",
+            "prompt": "Test prompt",
+            "created_at": time.time(),
+            "expires_at": time.time() + 3600,
+        }
+
+        moodboard_service.purge_cache(loc_id)
+        moodboard_service._save_to_cache(loc_id, entry)
+
+        # Retrieve and assert
+        loaded = moodboard_service._get_from_cache(loc_id)
+        assert loaded is not None
+        assert loaded["location_name"] == "Roundtrip Test Stage"
+        assert loaded["mime"] == "image/png"
+        assert loaded["image_base64"] == entry["image_base64"]
+
+    def test_moodboard_image_endpoint_200_and_content_type(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        from fastapi.testclient import TestClient
+        from server import app
+
+        client = TestClient(app)
+        fake_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc\xf8\xcfP\x0f\x00\x03\x86\x01\x80Z4}\xeb\x00\x00\x00\x00IEND\xaeB`\x82"
+
+        with patch("services.moodboard_service.get_or_generate_moodboard_image", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = (fake_bytes, "image/png")
+
+            resp = client.get("/api/locations/loc_img_200_test/moodboard/image")
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("image/png")
+            assert "max-age=86400" in resp.headers.get("cache-control", "")
+            assert resp.content == fake_bytes
+
+    def test_moodboard_image_endpoint_404_path(self):
+        from unittest.mock import AsyncMock, patch
+        from fastapi.testclient import TestClient
+        from server import app
+
+        client = TestClient(app)
+
+        with patch("services.moodboard_service.get_or_generate_moodboard_image", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = None
+
+            resp = client.get("/api/locations/loc_nonexistent_999/moodboard/image")
+            assert resp.status_code == 404
+            data = resp.json()
+            assert "not found" in data["detail"].lower()
+
     def test_investigation_makes_zero_imagen_calls(self):
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch

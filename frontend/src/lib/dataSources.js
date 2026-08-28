@@ -81,21 +81,6 @@ export const DATA_SOURCES = [
     timeout: "6.0 seconds hard timeout",
     fallback: "Pre-aggregated fallback priors with deterministic taxonomy rankings.",
   },
-  {
-    id: "imagen-3",
-    name: "Gemini Native Image Generation (Multimodal Visual Previews)",
-    tagline: "On-demand photorealistic film-still moodboards for alternate locations",
-    icon: "Sparkles",
-    provider: "Google Cloud / Gemini API",
-    attribution: "Gemini native image generation (Imagen 3 available via Vertex AI when provisioned)",
-    attributionUrl: "https://ai.google.dev/gemini-api/docs/image-generation",
-    endpoint: "Google GenAI SDK generate_content",
-    whatWeFetch: "16:9 cinematic establishing stills generated from location type, atmospheric notes, and lighting metadata.",
-    howUsed: "Allows producers to inspect photorealistic visual moodboards of alternate filming locations before approving recovery schedule moves. On-demand only (user click), zero overhead on investigation SLA.",
-    cacheTtl: "24 hours dual-tier (in-memory + disk cache)",
-    timeout: "8.0 seconds hard timeout",
-    fallback: "Graceful 202 placeholder card with uninterrupted option selection.",
-  },
 ];
 
 export const SIGNAL_IMPACTS = [
@@ -123,11 +108,6 @@ export const SIGNAL_IMPACTS = [
     signal: "Historical Cohort Aggregation (ClickHouse MV)",
     affectedAgent: "Budget Sentinel & Auditor",
     impactDescription: "Calibrates bottom-up itemized cost model with 30% empirical historical weighting and logs audit proof.",
-  },
-  {
-    signal: "Alternate Location Mood-Boards (Gemini Image Generation)",
-    affectedAgent: "Producer Review & Schedule Optimizer",
-    impactDescription: "Provides on-demand cinematic 16:9 visual previews for alternate locations on user click via Gemini native image generation (Imagen 3 available via Vertex AI when provisioned; cached for 24h, zero investigation overhead).",
   },
 ];
 

@@ -262,7 +262,7 @@ immutable record to ClickHouse."
 - For questions about how the system works (investigation process, what agents do, \
 how scoring works): Do NOT call a tool. Answer from your knowledge of the system \
 architecture: 6 agents (Orchestrator, Schedule Optimizer, Budget Sentinel, \
-Continuity Memory, Compliance, Auditor), ClickHouse MCP queries, TRD scoring \
+Continuity Memory, Compliance Sentinel, Auditor), ClickHouse MCP queries, TRD scoring \
 (0.40 cost + 0.30 delay + 0.20 continuity + 0.10 compliance).
 - Never give generic filler answers. If genuinely unclear, ask ONE specific \
 clarifying question: offer to explain recovery options, check weather risk, \
@@ -857,6 +857,29 @@ class CouncilChatbot:
         clean_q = (question or "").strip()
         if not clean_q:
             return {"answer": GREETING_RESPONSE, "intent": "llm_agent", "sources": [], "error": None}
+
+        # Greetings fast path
+        q_lower = clean_q.lower()
+        greeting_pats = [
+            r"^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening)|howdy|yo|sup|thanks|thank you|thx|cheers)(\s+there|\s+bot|\s+council|\s+assistant)?[!?., ]*$"
+        ]
+        if any(re.match(p, q_lower) for p in greeting_pats):
+            return {"answer": GREETING_RESPONSE, "intent": "llm_agent", "sources": [], "error": None}
+
+        # Investigation process architecture fast path
+        investigation_triggers = [
+            "investigation process", "how does the investigation", "what do the agents do",
+            "what does the council do", "explain the pipeline", "how does the council work",
+            "explain the agents", "what do agents do", "what happens during investigation",
+            "how the investigation works", "how the investigation council works",
+        ]
+        if any(t in q_lower for t in investigation_triggers):
+            return {
+                "answer": sanitize_text(HELP_KB["investigation_process"]["answer"]),
+                "intent": "llm_agent",
+                "sources": [],
+                "error": None,
+            }
 
         # ----------------------------------------------------------------
         # Fast path — Gemini unavailable: use deterministic keyword routing

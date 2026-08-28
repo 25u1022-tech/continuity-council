@@ -165,7 +165,7 @@ $$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavin
 4. **Live Multi-Agent Investigation**:
    Watch agents evaluate candidate slates in parallel, querying ClickHouse historical evidence via FastMCP.
 5. **Review Ranked Recovery Strategies**:
-   Compare grounded options with plain-English justifications, cost breakdowns, weather summaries, and on-demand **Gemini native visual mood-boards** for alternate locations.
+   Compare grounded options with plain-English justifications, cost breakdowns, and live weather and FX summaries.
 6. **Producer Approval**:
    Select and approve the preferred strategy.
 7. **Immutable Audit Commit**:
@@ -180,7 +180,6 @@ $$\text{Score} = 0.40 \cdot \text{CostSavingScore} + 0.30 \cdot \text{DelaySavin
 | **Database** | **ClickHouse Cloud** | `clickhouse-connect` (v1.7.1) + official **`mcp-clickhouse`** (v0.4.1) FastMCP stdio server |
 | **Agent Framework** | **Google ADK** | `google-adk` (v2.7.1) with `SequentialAgent`, `ParallelAgent`, `Runner`, and `FunctionTool` |
 | **AI / LLM** | **Google Gemini** | `gemini-3.6-flash` via official `google-genai` SDK with resilient backoff & JSON repair |
-| **Visual AI** | **Google Gemini Image** | Gemini native image generation (Imagen 3 available via Vertex AI when provisioned) on-demand 16:9 cinematic mood-boards with dual cache |
 | **Voice AI / TTS** | **Google Gemini TTS** | `gemini-3.1-flash-tts` speech synthesis with in-memory hash cache |
 | **Backend API** | **FastAPI + Python 3.11** | Async ASGI server with Pydantic v2 domain schemas |
 | **Frontend UI** | **React 18** | Tailwind CSS + Radix UI / shadcn/ui dark cinema interface |
@@ -213,7 +212,7 @@ continuity-council/
 │   │   ├── gemini_client.py       # Resilient Gemini wrapper with quota recovery
 │   │   ├── justification_service.py # Natural-language explainability justifications
 │   │   ├── schedule_extractor.py  # PDF shooting-schedule ingestion via Gemini
-│   │   ├── moodboard_service.py   # Gemini native visual mood-board generator (Imagen 3 available via Vertex AI when provisioned)
+│   │   ├── moodboard_service.py   # Visual asset service (backend retained)
 │   │   ├── tts_service.py         # Gemini TTS speech synthesis service
 │   │   ├── nl_parser.py           # Natural-language disruption parser
 │   │   ├── geo_service.py         # Haversine distance, city tiers, and World Bank PPP factors
@@ -339,7 +338,6 @@ All backend API routes are served under the `/api` prefix:
 | `POST /api/disruptions` | Report disruption | Dispatches background ADK `Runner.run_async` multi-agent investigation |
 | `GET /api/cases/{case_id}` | Live investigation polling | Real-time agent statuses, MCP call logs, ranked options, and rationale |
 | `POST /api/cases/{case_id}/approve` | Producer approval | Triggers `Auditor` agent to append immutable record to ClickHouse |
-| `GET /api/locations/{id}/moodboard` | Location mood-board | On-demand Gemini native image generation (Imagen 3 available via Vertex AI when provisioned) |
 | `POST /api/chat` | Council Reasoning Chat | Gemini function-calling agent with ClickHouse source citations |
 | `POST /api/chat/tts/generate` | Generate TTS audio | Asynchronously generates speech audio via Gemini TTS |
 | `GET /api/chat/tts` | Retrieve TTS audio | Streams cached audio stream (`audio/wav`) |

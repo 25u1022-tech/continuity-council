@@ -382,7 +382,7 @@ async def get_location_moodboard(
     location_id: str = Path(..., description="Location ID"),
     scene_id: Optional[str] = Query(None, description="Optional scene ID for lighting/atmosphere context"),
 ):
-    """Get on-demand Imagen 3 cinematic mood-board preview for a location."""
+    """Get on-demand cinematic mood-board preview metadata and status for a location."""
     res = await moodboard_service.generate_moodboard(
         location_id=location_id,
         timeout=8.0,
@@ -399,6 +399,27 @@ async def get_location_moodboard(
             "status": "unavailable",
             "location_id": location_id,
             "detail": "AI moodboard preview currently unavailable or cooling down.",
+        },
+    )
+
+
+@api.get("/locations/{location_id}/moodboard/image")
+async def get_location_moodboard_image(
+    location_id: str = Path(..., description="Location ID"),
+):
+    """Get raw image bytes for location moodboard preview."""
+    res = await moodboard_service.get_or_generate_moodboard_image(location_id=location_id, timeout=8.0)
+    if res is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Moodboard image for location '{location_id}' not found or unavailable.",
+        )
+    image_bytes, mime = res
+    return Response(
+        content=image_bytes,
+        media_type=mime,
+        headers={
+            "Cache-Control": "public, max-age=86400",
         },
     )
 
