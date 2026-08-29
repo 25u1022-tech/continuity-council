@@ -352,7 +352,10 @@ All backend API routes are served under the `/api` prefix:
 
 Continuity Council is packaged as a unified multi-stage Docker container that builds the React frontend and serves both the SPA static assets and FastAPI backend from a single origin on port `8000`.
 
-### Production Container (`Dockerfile`)
+### Production Containers
+
+#### 1. All-in-One Fullstack Container (`Dockerfile`)
+Packages both the built React SPA and FastAPI backend into a single multi-stage container.
 ```dockerfile
 # Multi-stage build:
 # 1. node:18-alpine builds the React application
@@ -361,4 +364,13 @@ EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
+#### 2. Render Deployment (`Dockerfile.render`)
+For backend-only deployment to Render (e.g. when frontend is deployed on Vercel):
+- **Dockerfile path:** `Dockerfile.render`
+- **Docker context:** Repo root (`.`)
+- **Base image:** `python:3.11-slim`
+- **Exposed port:** `8000`
+- **Command:** `python -m uvicorn backend.server:app --host 0.0.0.0 --port 8000 --workers 1`
+
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for full deployment instructions on Render.com, Cloud Run, or any Docker-compatible host.
+
