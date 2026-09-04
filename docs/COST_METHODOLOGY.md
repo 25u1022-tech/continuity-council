@@ -94,7 +94,7 @@ $$\text{Historical Prior} = \text{SELECT avgMerge(avg\_cost) FROM strategy\_perf
 
 This empirical anchor adjusts theoretical numbers based on real historical friction (unexpected overtime, turnaround penalties, and schedule slippage observed across 200,000+ past cases).
 
-> **Note on Historical Corpus Provenance**: The 200,000-row `disruption_history` corpus is synthetic but rigorously grounded in real public archives: 60 global filming hubs, daily Open-Meteo historical weather (2019–2024), published SAG-AFTRA/IATSE day rates, and IMDb/TMDB budget percentiles. It exhibits real geographic and seasonal dynamics (such as the documented monsoon disruption spike in Mumbai from June to September) while maintaining strict deterministic reproducibility (`random.seed(42)`).
+> **Note on Historical Corpus Provenance**: The 200,000-row historical corpus is synthetic, grounded in real public archives: 60 global filming hubs (OSM), six years of real Open-Meteo historical weather (2019–2024), published SAG-AFTRA/IATSE rate cards, and IMDb/TheNumbers budget percentiles. It exhibits real geographic and seasonal dynamics (such as the documented monsoon disruption spike in Mumbai from June to September) while maintaining strict deterministic reproducibility (`random.seed(42)`).
 
 ---
 

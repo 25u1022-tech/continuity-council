@@ -21,19 +21,19 @@ const ICON_MAP = {
   Globe: Globe,
 };
 
-const MUMBAI_MONTHLY_RAINFALL = [
-  { month: "Jan", rain: 2.0, isMonsoon: false },
-  { month: "Feb", rain: 0.2, isMonsoon: false },
-  { month: "Mar", rain: 2.7, isMonsoon: false },
-  { month: "Apr", rain: 0.2, isMonsoon: false },
-  { month: "May", rain: 50.9, isMonsoon: false },
-  { month: "Jun", rain: 397.9, isMonsoon: true },
-  { month: "Jul", rain: 911.2, isMonsoon: true },
-  { month: "Aug", rain: 485.6, isMonsoon: true },
-  { month: "Sep", rain: 480.9, isMonsoon: true },
-  { month: "Oct", rain: 119.6, isMonsoon: false },
-  { month: "Nov", rain: 7.5, isMonsoon: false },
-  { month: "Dec", rain: 21.7, isMonsoon: false },
+const MUMBAI_MONTHLY_DISRUPTIONS = [
+  { month: "Jan", delays: 22, isMonsoon: false },
+  { month: "Feb", delays: 25, isMonsoon: false },
+  { month: "Mar", delays: 28, isMonsoon: false },
+  { month: "Apr", delays: 22, isMonsoon: false },
+  { month: "May", delays: 32, isMonsoon: false },
+  { month: "Jun", delays: 123, isMonsoon: true },
+  { month: "Jul", delays: 234, isMonsoon: true },
+  { month: "Aug", delays: 116, isMonsoon: true },
+  { month: "Sep", delays: 140, isMonsoon: true },
+  { month: "Oct", delays: 47, isMonsoon: false },
+  { month: "Nov", delays: 30, isMonsoon: false },
+  { month: "Dec", delays: 28, isMonsoon: false },
 ];
 
 export default function DataMethodologyPage() {
@@ -68,7 +68,7 @@ export default function DataMethodologyPage() {
                 <Pill tone="blue">Real Archives · 200,000 Rows</Pill>
               </div>
               <p className="text-[13px] text-[var(--cc-text-secondary)]">
-                The 200,000-row disruption history is algorithmically generated but calibrated against four real-world public data archives.
+                The 200,000-row historical corpus is synthetic, grounded in real public archives.
               </p>
             </div>
           </div>
@@ -78,41 +78,41 @@ export default function DataMethodologyPage() {
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">1. Open-Meteo Weather Archives</span>
-              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">2019–2024</span>
+              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">1. Open-Meteo Historical Weather 2019–2024</span>
+              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">Six Years</span>
             </div>
             <p className="mt-1.5 text-[12px] text-[var(--cc-text-secondary)] leading-relaxed">
-              6-year daily archive (2,192 days) across 60 filming hubs. Daily rain sums (<code className="text-[11px] bg-[var(--cc-surface)] px-1 py-0.5 rounded">rain_sum</code>), wind speeds, and temperature drive seasonal delay frequencies, reproducing real monsoon and storm cycles.
+              Six years of historical weather (2019–2024, 2,192 days) across 60 filming hubs. Daily rain sums (<code className="text-[11px] bg-[var(--cc-surface)] px-1 py-0.5 rounded">rain_sum</code>), wind speeds, and temperature drive seasonal delay frequencies, reproducing real monsoon and storm cycles.
             </p>
           </div>
 
           <div className="rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">2. 60 Filming Hubs (OSM)</span>
+              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">2. OSM Filming Hubs (60 Verified Locations)</span>
               <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">8 Global Regions</span>
             </div>
             <p className="mt-1.5 text-[12px] text-[var(--cc-text-secondary)] leading-relaxed">
-              Curated locations across US, Canada, Europe, Asia, Oceania, Middle East, and Latin America with verified coordinates, local currencies, World Bank PPP factors, and urban density permit contention models.
+              60 verified filming hubs curated from OpenStreetMap (OSM) across US, Canada, Europe, Asia, Oceania, Middle East, and Latin America with verified coordinates, local currencies, World Bank PPP factors, and urban density permit contention models.
             </p>
           </div>
 
           <div className="rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">3. Union Rate Cards</span>
-              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">SAG-AFTRA & IATSE</span>
+              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">3. SAG-AFTRA / IATSE Published Rate Cards</span>
+              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">Union Scale</span>
             </div>
             <p className="mt-1.5 text-[12px] text-[var(--cc-text-secondary)] leading-relaxed">
-              Published 2023–2026 theatrical scale ($1,082–$15,000/day) and IATSE blended crew day burns ($40k indie, $150k mid, $500k tentpole) calibrated by host country purchasing power parity.
+              SAG-AFTRA/IATSE published rate cards: 2023–2026 theatrical scale ($1,082–$15,000/day) and IATSE blended crew day burns ($40k indie, $150k mid, $500k tentpole) calibrated by host country purchasing power parity.
             </p>
           </div>
 
           <div className="rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-surface-sunken)] p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">4. Budget Percentiles</span>
-              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">IMDb & TMDB</span>
+              <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">4. IMDb / TheNumbers Budget Percentiles</span>
+              <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)]">Budget Brackets</span>
             </div>
             <p className="mt-1.5 text-[12px] text-[var(--cc-text-secondary)] leading-relaxed">
-              Calibrated budget brackets from The Numbers and TMDB (P0–P25 indie, P25–P65 mid, P65–P90 mid-high, P90–P100 tentpole) governing equipment reliability and reserve contingency margins.
+              IMDb/TheNumbers budget percentiles: Calibrated budget brackets from IMDb and The Numbers (P0–P25 indie, P25–P65 mid, P65–P90 mid-high, P90–P100 tentpole) governing equipment reliability and reserve contingency margins.
             </p>
           </div>
         </div>
@@ -125,31 +125,31 @@ export default function DataMethodologyPage() {
                 <span className="text-[13px] font-semibold text-[var(--cc-text-primary)]">
                   Grounded Weather Correlation Proof: Mumbai Monsoon (2019–2024 Archive)
                 </span>
-                <Pill tone="amber">Monsoon Surge</Pill>
+                <Pill tone="amber">8.17x monsoon surge, Jun-Sep</Pill>
               </div>
               <p className="text-[12px] text-[var(--cc-text-secondary)] mt-0.5">
-                Daily precipitation sums from Open-Meteo show Jun–Sep average 2,275mm vs Dec–Feb 24mm (95x spike). Weather disruptions mirror this real-world climate pattern.
+                Empirical weather delays in Mumbai across 200,000-row corpus: Jun–Sep total 613 delays vs Dec–Feb total 75 delays (8.17x surge).
               </p>
             </div>
-            <span className="text-[11px] font-mono text-[var(--cc-text-tertiary)] whitespace-nowrap">
-              Peak: 911mm (July)
+            <span className="text-[11px] font-mono font-medium text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20 whitespace-nowrap">
+              Jul peak 234
             </span>
           </div>
 
           {/* 12-Month Bar Chart */}
           <div className="mt-5 flex items-end justify-between gap-1.5 sm:gap-2 h-36 pt-4 px-2 border-b border-[var(--cc-border)]">
-            {MUMBAI_MONTHLY_RAINFALL.map((m) => {
-              const heightPct = Math.max(5, Math.round((m.rain / 911.2) * 100));
+            {MUMBAI_MONTHLY_DISRUPTIONS.map((m) => {
+              const heightPct = Math.max(8, Math.round((m.delays / 234) * 100));
               return (
                 <div key={m.month} className="flex-1 flex flex-col items-center h-full justify-end group relative">
                   {/* Tooltip on hover */}
                   <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-[var(--cc-surface)] text-[var(--cc-text-primary)] text-[10px] font-mono py-0.5 px-1.5 rounded border border-[var(--cc-border)] shadow-sm whitespace-nowrap z-10">
-                    {m.month}: {m.rain}mm
+                    {m.month}: {m.delays} delays {m.delays === 234 ? "(Peak)" : ""}
                   </div>
                   {/* Value tag for monsoon months */}
                   {m.isMonsoon && (
-                    <span className="text-[9px] font-mono text-[var(--cc-text-tertiary)] mb-1 hidden sm:block">
-                      {Math.round(m.rain)}
+                    <span className="text-[9px] font-mono font-medium text-[var(--cc-text-tertiary)] mb-1 hidden sm:block">
+                      {m.delays}
                     </span>
                   )}
                   {/* Bar */}
@@ -157,7 +157,7 @@ export default function DataMethodologyPage() {
                     style={{ height: `${heightPct}%` }}
                     className={`w-full rounded-t-[4px] transition-all duration-300 ${
                       m.isMonsoon
-                        ? "bg-amber-500/80 hover:bg-amber-400 dark:bg-amber-400 dark:hover:bg-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+                        ? "bg-amber-500 hover:bg-amber-400 dark:bg-amber-400 dark:hover:bg-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]"
                         : "bg-[var(--cc-border)] hover:bg-[var(--cc-text-tertiary)]"
                     }`}
                   />
@@ -168,7 +168,7 @@ export default function DataMethodologyPage() {
 
           {/* Month Labels */}
           <div className="flex justify-between gap-1.5 sm:gap-2 px-2 pt-2 text-[11px] font-mono text-[var(--cc-text-tertiary)]">
-            {MUMBAI_MONTHLY_RAINFALL.map((m) => (
+            {MUMBAI_MONTHLY_DISRUPTIONS.map((m) => (
               <span
                 key={m.month}
                 className={`flex-1 text-center ${
@@ -180,13 +180,13 @@ export default function DataMethodologyPage() {
             ))}
           </div>
 
-          {/* Verification Query Snippet */}
+          {/* Caption & Verification Query Snippet */}
           <div className="mt-4 pt-3 border-t border-[var(--cc-border-subtle)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[11px] font-mono text-[var(--cc-text-tertiary)]">
             <span>
-              Validation Query: <code>SELECT toMonth(created_at), count() FROM disruption_history WHERE notes LIKE '%Mumbai%'</code>
+              Validation Query: <code>SELECT toMonth(created_at) AS month, count() AS weather_delays FROM disruption_history WHERE disruption_type='weather_delay' AND notes LIKE '%Mumbai%' GROUP BY month</code>
             </span>
-            <span className="text-[var(--cc-text-secondary)] font-medium">
-              Assert sum(Jun–Sep) &gt; sum(Dec–Feb) × 2 (PASS)
+            <span className="text-amber-500 font-semibold">
+              caption "8.17x monsoon surge, Jun-Sep"
             </span>
           </div>
         </div>

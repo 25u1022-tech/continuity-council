@@ -9,7 +9,7 @@ Continuity Council integrates four data providers to deliver real-time environme
 - **Provider**: Open-Meteo GmbH
 - **License / Attribution**: [Weather data by Open-Meteo (CC-BY 4.0)](https://open-meteo.com/)
 - **Endpoint**: `https://api.open-meteo.com/v1/forecast` & `https://archive-api.open-meteo.com/v1/archive`
-- **Data Ingested**: 5-year historical and short-term forecast precipitation probability, daily precipitation sums, and maximum 10m wind speeds for exact set coordinates.
+- **Data Ingested**: six years of historical (2019-2024) and short-term forecast precipitation probability, daily precipitation sums, and maximum 10m wind speeds for exact set coordinates.
 - **Agent Integration**:
   - Informs the **Budget Sentinel** whether to append rain contingency line items.
   - Informs the **Schedule Optimizer** when evaluating exterior vs interior soundstage swaps.
@@ -51,7 +51,7 @@ Continuity Council integrates four data providers to deliver real-time environme
 
 - **Provider**: ClickHouse, Inc. & Model Context Protocol (stdio)
 - **License / Attribution**: ClickHouse Cloud columnar analytical engine & Model Context Protocol.
-- **Data Ingested**: 200,000+ historical disruption records queried via `strategy_performance_mv` Materialized View.
+- **Data Ingested**: 200,000+ historical disruption records queried via `strategy_performance_mv` Materialized View. Synthetic corpus grounded in real archives — see Historical Corpus Provenance.
 - **Agent Integration**:
   - Supplies 30% empirical weighting for cost calibration and delay predictions.
 - **Caching & SLA**:
