@@ -1,0 +1,10 @@
+{
+  "status": "ready",
+  "location_id": "loc_002",
+  "location_name": "Downtown Loft Interior",
+  "image_url": "/api/locations/loc_002/moodboard/image",
+  "image_base64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD...AUUUUAFFFFAH/9k= (25712 base64 chars)",
+  "mime": "image/jpeg",
+  "prompt": "Cinematic film still, 35mm motion picture photography, Panavision anamorphic lens. Wide establishing shot of Downtown Loft Interior (INTERIOR). Atmosphere: cinematic golden hour with diffused natural daylight. Masterful production design, authentic textures, volumetric haze, photorealistic depth of field, 8k resolution. No text, no watermarks, no subtitles, no close-up people, no logos.",
+  "cached": true
+}
