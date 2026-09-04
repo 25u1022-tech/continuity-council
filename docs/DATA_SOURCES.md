@@ -58,10 +58,32 @@ Continuity Council integrates four data providers to deliver real-time environme
   - **In-Memory TTL**: 10 minutes + persistent warm MCP session ($<200\text{ms}$ query latency).
   - **Timeout**: 6.0 seconds hard timeout.
 
+## 5. Historical Corpus Provenance
+
+The 200,000-row `disruption_history` analytical dataset is synthetic but grounded in real-world public data archives, ensuring realistic geographic, environmental, and budgetary distributions:
+
+1. **Open-Meteo Historical Weather Archive (2019–2024)**:
+   - **Source**: [Open-Meteo Historical Weather API](https://archive-api.open-meteo.com/v1/archive) (CC-BY 4.0)
+   - **Usage**: Daily rainfall (`rain_sum`), maximum wind gust (`wind_speed_10m_max`), and maximum temperature (`temperature_2m_max`) across 6 years (2,192 days) for all 60 filming hubs. Weather disruption frequencies directly reflect real seasonal phenomena (e.g. Mumbai's monsoon season from June to September).
+   - **Storage**: Committed offline cache in `scripts/data/weather_cache/{city_slug}.json`.
+
+2. **Global Production Filming Hubs**:
+   - **Source**: [OpenStreetMap & Nominatim](https://www.openstreetmap.org/)
+   - **Usage**: 60 verified production centers worldwide across 8 geographical regions with verified lat/lon coordinates, country codes, local currencies, World Bank PPP factors, and urban density ratings in `scripts/data/real_locations.json`.
+
+3. **Union Rate Card Benchmarks**:
+   - **Source**: [SAG-AFTRA 2023–2026 Theatrical Agreement](https://www.sagaftra.org/contracts-industry-resources/theatrical-independent-film) & [IATSE Area Standards Agreement](https://iatse.net/)
+   - **Usage**: Crew day burn rates ($40k indie, $150k mid, $500k tentpole), SAG principal performer scale ($1,082–$15,000/day), and background rates calibrated with localized purchasing power parity.
+
+4. **Production Budget Percentiles**:
+   - **Source**: [The Numbers / Nash Information Services](https://www.the-numbers.com/) & [Kaggle TMDB 5000 Movie Dataset](https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata)
+   - **Usage**: Empirical budget distribution percentiles (P0–P25 indie, P25–P65 mid, P65–P90 mid-high, P90–P100 tentpole) governing equipment reliability and reserve contingency buffers.
+
 ---
 
-## 5. Resilience & Offline Fallbacks
+## 6. Resilience & Offline Fallbacks
 
 All external network operations adhere to the **15-Second Investigation Guarantee**:
 - If any external API times out or the server runs in an air-gapped CI test runner, deterministic fallback estimators trigger immediately.
 - Offline tests run with 100% mocked HTTP clients, guaranteeing deterministic test execution without network flake.
+

@@ -75,6 +75,13 @@ START_DATE = NOW.date()
 
 # ---------------------------------------------------------------------------
 # 2. Rate Cards (Industry Benchmarks)
+# Published Union Rate Cards:
+#   - SAG-AFTRA 2023-2026 Theatrical Agreement (Schedule F day performer scale)
+#   - SAG-AFTRA Modified Low Budget Agreement 2024
+#   - IATSE Area Standards Agreement (blended crew day burn rates)
+# Budget Percentile Brackets:
+#   - Nash Information Services ("The Numbers") & Kaggle TMDB 5000 Dataset
+#   - P0-P25: $1M-$5M (indie) | P25-P65: $15M-$50M (mid) | P65-P90: $50M-$100M | P90-P100: $100M-$250M+
 # ---------------------------------------------------------------------------
 rate_cards_data = [
     # Indie tier ($1M-$5M budget)
@@ -465,165 +472,25 @@ client.insert(
 print(f"Catalog seeded: 6 productions ({len(productions_rows)} prods, {len(all_locations)} locations, {len(all_cast)} cast, {len(all_scenes)} scenes).")
 
 # ---------------------------------------------------------------------------
-# 4. Disruption History (200,000 synthetic rows in 10k batches)
+# 4. Disruption History (200,000 grounded rows from real archives)
 # ---------------------------------------------------------------------------
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.data.seed_grounded_history import generate_grounded_history
+
 N_TOTAL_HISTORY = 200_000
 BATCH_SIZE = 10_000
 
-TYPE_STRATEGY_MAP = {
-    "lead_actor_unavailable": [
-        ("shoot_cover_scenes", 0.40, (8000, 28000), (2.0, 5.5), (0.20, 0.45), (0.05, 0.20)),
-        ("swap_locations", 0.22, (15000, 42000), (3.0, 7.5), (0.12, 0.32), (0.10, 0.35)),
-        ("move_to_later_day", 0.18, (20000, 52000), (5.0, 9.5), (0.15, 0.35), (0.10, 0.30)),
-        ("use_stand_in", 0.10, (10000, 26000), (2.0, 4.5), (0.35, 0.65), (0.08, 0.25)),
-        ("wait_for_actor", 0.05, (35000, 95000), (8.0, 16.0), (0.03, 0.18), (0.05, 0.20)),
-        ("recast_scene", 0.03, (25000, 70000), (6.0, 14.0), (0.50, 0.85), (0.20, 0.50)),
-        ("split_scene", 0.02, (12000, 32000), (3.0, 6.5), (0.30, 0.55), (0.10, 0.30)),
-    ],
-    "location_unavailable": [
-        ("swap_locations", 0.45, (14000, 40000), (2.5, 6.5), (0.10, 0.30), (0.12, 0.40)),
-        ("move_to_later_day", 0.28, (18000, 48000), (4.5, 9.0), (0.14, 0.34), (0.10, 0.30)),
-        ("shoot_cover_scenes", 0.15, (8500, 26000), (2.0, 5.0), (0.22, 0.46), (0.05, 0.20)),
-        ("split_scene", 0.08, (11000, 30000), (2.5, 6.0), (0.28, 0.52), (0.08, 0.28)),
-        ("wait_for_actor", 0.04, (30000, 85000), (7.0, 15.0), (0.05, 0.20), (0.05, 0.20)),
-    ],
-    "weather_delay": [
-        ("swap_locations", 0.42, (12000, 36000), (2.0, 6.0), (0.12, 0.32), (0.10, 0.30)),
-        ("shoot_cover_scenes", 0.30, (7500, 24000), (1.5, 4.5), (0.20, 0.42), (0.05, 0.18)),
-        ("move_to_later_day", 0.20, (16000, 44000), (4.0, 8.5), (0.15, 0.35), (0.10, 0.28)),
-        ("wait_for_actor", 0.08, (28000, 75000), (6.0, 13.0), (0.04, 0.18), (0.05, 0.20)),
-    ],
-    "equipment_failure": [
-        ("swap_locations", 0.35, (11000, 34000), (2.0, 5.5), (0.10, 0.30), (0.08, 0.28)),
-        ("move_to_later_day", 0.30, (17000, 46000), (4.0, 8.5), (0.14, 0.32), (0.10, 0.30)),
-        ("shoot_cover_scenes", 0.22, (8000, 25000), (1.8, 4.8), (0.22, 0.45), (0.05, 0.20)),
-        ("split_scene", 0.13, (10000, 28000), (2.2, 5.2), (0.25, 0.50), (0.08, 0.25)),
-    ],
-}
+print(f"Generating {N_TOTAL_HISTORY:,} grounded historical disruption rows from real archives (seed=42)...")
+grounded_rows = generate_grounded_history(n_total=N_TOTAL_HISTORY, seed=42)
 
-DISRUPTION_TYPES_WEIGHTS = [
-    ("lead_actor_unavailable", 0.28),
-    ("location_unavailable", 0.28),
-    ("weather_delay", 0.22),
-    ("equipment_failure", 0.22),
-]
-
-TYPE_ROLES = {
-    "lead_actor_unavailable": "lead_actor",
-    "location_unavailable": "location",
-    "weather_delay": "location",
-    "equipment_failure": "equipment",
-}
-
-SEVERITIES = [("low", 0.30, 0.80), ("medium", 0.45, 1.0), ("high", 0.25, 1.30)]
-PRODUCTION_TYPES = [("feature_film", 0.50), ("tv_series", 0.28), ("streaming_series", 0.14), ("commercial", 0.08)]
-
-NOTES_TEMPLATES = {
-    "shoot_cover_scenes": [
-        "Cover scenes preserved shoot day momentum; principal setups moved to a later day.",
-        "B-roll and insert coverage kept the crew active while talent/location cleared.",
-        "Second unit picked up cover set work; minimal overtime incurred.",
-        "Cover stage work absorbed disruption with excellent crew morale.",
-    ],
-    "swap_locations": [
-        "Interior/exterior swap absorbed the disruption with moderate company move cost.",
-        "Location swap required extra transport but avoided a lost shooting day.",
-        "Cover set swap approved by AD; continuity verified before move.",
-        "Company moved to soundstage; schedule preserved with minimal delay.",
-    ],
-    "move_to_later_day": [
-        "Affected scenes pushed to a later shoot day; minor crew overtime incurred.",
-        "Rescheduled to buffer day; required condensed multi-camera setups.",
-        "Day push absorbed within production contingency budget.",
-        "Moved to final week wrap slate; location rebooked successfully.",
-    ],
-    "wait_for_actor": [
-        "Unit held on standby; idle crew time incurred while waiting for talent.",
-        "Production held on location; minor per-diem overruns.",
-        "Standby hold resolved in afternoon; partial slate completed.",
-    ],
-    "recast_scene": [
-        "Role recast; pickup coverage completed without breaking continuity.",
-        "Recast completed quickly; wardrobe adjustments approved by director.",
-    ],
-    "split_scene": [
-        "Scene split across two days; lighting matched perfectly on soundstage.",
-        "Partial coverage completed; remainder scheduled with stand-in inserts.",
-    ],
-    "use_stand_in": [
-        "Photo double covered wide shots; close-ups deferred to talent return.",
-        "Stand-in executed blocking rehearsals; main unit ready upon arrival.",
-    ],
-}
-
-def weighted_choice(pairs):
-    r = random.random()
-    acc = 0.0
-    for value, w in pairs:
-        acc += w
-        if r <= acc:
-            return value
-    return pairs[-1][0]
-
-print(f"Generating and inserting {N_TOTAL_HISTORY:,} historical disruption rows in {BATCH_SIZE:,}-row batches...")
-
+print(f"Inserting {len(grounded_rows):,} rows in {BATCH_SIZE:,}-row batches...")
 total_inserted = 0
-batch = []
-batch_num = 1
-num_batches = N_TOTAL_HISTORY // BATCH_SIZE
+num_batches = len(grounded_rows) // BATCH_SIZE
 
-for i in range(N_TOTAL_HISTORY):
-    dtype = weighted_choice(DISRUPTION_TYPES_WEIGHTS)
-    strategy_candidates = TYPE_STRATEGY_MAP[dtype]
-    strat_item = weighted_choice([(s, s[1]) for s in strategy_candidates])
-    strat_name, _, (cost_lo, cost_hi), (d_lo, d_hi), (cont_lo, cont_hi), (comp_lo, comp_hi) = strat_item
-
-    sev_choice = weighted_choice([(0, 0.30), (1, 0.45), (2, 0.25)])
-    severity, _, sev_mult = SEVERITIES[sev_choice]
-
-    cost = int(random.triangular(cost_lo, cost_hi, cost_lo + (cost_hi - cost_lo) * 0.35) * sev_mult)
-    delay = round(random.triangular(d_lo, d_hi, d_lo + (d_hi - d_lo) * 0.40) * sev_mult, 1)
-
-    cont = round(random.uniform(cont_lo, cont_hi), 2)
-    comp = round(random.uniform(comp_lo, comp_hi), 2)
-
-    cost_norm = (cost - cost_lo * 0.7) / (cost_hi * 1.35 - cost_lo * 0.7)
-    delay_norm = (delay - d_lo * 0.7) / (d_hi * 1.35 - d_lo * 0.7)
-    success = max(0.05, min(0.98, 1.0 - 0.42 * cost_norm - 0.32 * delay_norm - 0.16 * cont + random.uniform(-0.06, 0.06)))
-
-    created = NOW - timedelta(days=random.uniform(1, 1095), hours=random.uniform(0, 23))
-
-    batch.append([
-        f"dis_{uuid.uuid4().hex[:12]}",
-        weighted_choice(PRODUCTION_TYPES),
-        dtype,
-        severity,
-        TYPE_ROLES[dtype],
-        random.randint(1, 8),
-        strat_name,
-        cost,
-        delay,
-        cont,
-        comp,
-        round(success, 2),
-        random.choice(NOTES_TEMPLATES.get(strat_name, ["Resolution executed per production guidelines."])),
-        created,
-    ])
-
-    if len(batch) >= BATCH_SIZE:
-        client.insert(
-            "continuity_council.disruption_history", batch,
-            column_names=["disruption_id", "production_type", "disruption_type", "severity",
-                          "affected_role", "affected_scene_count", "resolution_strategy",
-                          "cost_overrun_usd", "schedule_delay_hours", "continuity_risk_score",
-                          "compliance_risk_score", "success_score", "notes", "created_at"],
-        )
-        total_inserted += len(batch)
-        print(f"  Batch {batch_num}/{num_batches} inserted ({total_inserted:,} / {N_TOTAL_HISTORY:,} rows)...")
-        batch = []
-        batch_num += 1
-
-if batch:
+for batch_idx in range(num_batches):
+    batch = grounded_rows[batch_idx * BATCH_SIZE : (batch_idx + 1) * BATCH_SIZE]
     client.insert(
         "continuity_council.disruption_history", batch,
         column_names=["disruption_id", "production_type", "disruption_type", "severity",
@@ -632,8 +499,20 @@ if batch:
                       "compliance_risk_score", "success_score", "notes", "created_at"],
     )
     total_inserted += len(batch)
+    print(f"  Batch {batch_idx + 1}/{num_batches} inserted ({total_inserted:,} / {N_TOTAL_HISTORY:,} rows)...")
 
-print(f"Finished inserting {total_inserted:,} disruption_history rows.")
+remainder = grounded_rows[num_batches * BATCH_SIZE :]
+if remainder:
+    client.insert(
+        "continuity_council.disruption_history", remainder,
+        column_names=["disruption_id", "production_type", "disruption_type", "severity",
+                      "affected_role", "affected_scene_count", "resolution_strategy",
+                      "cost_overrun_usd", "schedule_delay_hours", "continuity_risk_score",
+                      "compliance_risk_score", "success_score", "notes", "created_at"],
+    )
+    total_inserted += len(remainder)
+
+print(f"Finished inserting {total_inserted:,} grounded disruption_history rows.")
 
 # ---------------------------------------------------------------------------
 # 5. Re-create & Populate Materialized View
@@ -671,5 +550,14 @@ for tbl in [
 ]:
     cnt = client.command(f"SELECT count() FROM continuity_council.{tbl}")
     print(f"  continuity_council.{tbl:<25}: {cnt:>10,}")
+
+# ---------------------------------------------------------------------------
+# 6. Corpus Verification (Automated Sanity & Mumbai Monsoon Proof)
+# ---------------------------------------------------------------------------
+from scripts.verify_grounded_data import run_verification
+verification_passed = run_verification(client)
+if not verification_passed:
+    print("FATAL: Grounded data corpus verification failed!")
+    sys.exit(1)
 
 print("\nSEED COMPLETED SUCCESSFULLY.")
