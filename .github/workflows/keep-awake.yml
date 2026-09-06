@@ -1,4 +1,4 @@
-name: Keep Render Awake
+name: Keep Cloud Run Warm
 on:
   schedule:
     - cron: '*/5 * * * *' # Every 5 minutes
@@ -8,4 +8,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Health Endpoint
-        run: curl -f https://continuity-council.onrender.com/api/health || echo "Ping failed"
+        run: curl -f https://continuity-council-254080656276.us-central1.run.app/api/health || echo "Ping failed"

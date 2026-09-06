@@ -1,5 +1,5 @@
 # ── Stage 1: Build React/CRA frontend ──────────────────────────────────────
-FROM node:18-alpine AS frontend-build
+FROM node:20-alpine AS frontend-build
 
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/yarn.lock ./
@@ -34,4 +34,4 @@ ENV FRONTEND_BUILD_DIR=../frontend/build
 EXPOSE 8080
 
 WORKDIR /app/backend
-CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}
