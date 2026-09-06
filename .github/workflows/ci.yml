@@ -18,7 +18,14 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest
       - name: Unit tests
-        run: python -m pytest tests/test_units.py -q
+        env:
+          CLICKHOUSE_HOST: dummy-ci-host
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: dummy-ci-password
+          CLICKHOUSE_DATABASE: default
+          CLICKHOUSE_PORT: 8443
+          GEMINI_API_KEY: dummy-ci-key
+        run: python -m pytest tests/test_units.py -v
 
   deploy-status:
     name: Production Deployment Status

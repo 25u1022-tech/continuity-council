@@ -2073,7 +2073,9 @@ class TestSchedulePDFExtractor:
             "cast": ["Mara Voss", "Dev Okafor"],
         }
 
-        with patch("services.gemini_client.generate_json_with_pdf", new_callable=AsyncMock) as mock_gemini:
+        with patch("services.gemini_client.generate_json_with_pdf", new_callable=AsyncMock) as mock_gemini, \
+             patch("services.clickhouse_client.fetch_production_bundle", new_callable=AsyncMock) as mock_bundle:
+            mock_bundle.return_value = {"production": {"production_id": "prod_001"}}
             mock_gemini.return_value = mock_extraction
 
             # 1. POST /api/productions/prod_001/import-schedule
