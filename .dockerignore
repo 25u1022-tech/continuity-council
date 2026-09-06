@@ -1,8 +1,33 @@
+# Version control
 .git
-node_modules
-.venv
-**/.env
-frontend/build
-test_reports
+.gitignore
+
+# Python artifacts
 __pycache__
+*.pyc
+*.pyo
+.venv
+backend/.venv
 .pytest_cache
+*.log
+
+# Node artifacts
+node_modules
+frontend/node_modules
+
+# Env files (never bake secrets into the image)
+.env
+*.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Build outputs (rebuilt inside Docker)
+frontend/build
+frontend/dist
+
+# Test and dev artifacts
+test_reports
+coverage
+.cache
+backend/.cache

@@ -117,24 +117,9 @@ print(f"[5] POST /api/disruptions/parse-nl: status={status} in {elapsed:.3f}s | 
 assert status == 200
 timings["nl_parser_s"] = elapsed
 
-# 6. GET /api/locations/{id}/moodboard
-# Test cache miss/fallback
-t0 = time.perf_counter()
-status_miss, data_miss, elapsed_miss, _ = get("/api/locations/loc_999/moodboard")
-elapsed_miss = time.perf_counter() - t0
-print(f"[6a] GET /api/locations/loc_999/moodboard (miss/fallback): status={status_miss} in {elapsed_miss:.3f}s")
-assert status_miss in (200, 202)
-
-# Test cache hit (loc_002 was seeded earlier)
-status_hit, data_hit, elapsed_hit, _ = get("/api/locations/loc_002/moodboard")
-print(f"[6b] GET /api/locations/loc_002/moodboard (hit): status={status_hit} in {elapsed_hit:.3f}s cached={data_hit.get('cached') if isinstance(data_hit, dict) else False}")
-assert status_hit in (200, 202)
-timings["moodboard_miss_s"] = elapsed_miss
-timings["moodboard_hit_s"] = elapsed_hit
-
-# 7. POST /api/chat/tts/generate
+# 6. POST /api/chat/tts/generate
 status, data, elapsed, _ = post_json("/api/chat/tts/generate", {"text": "Test speech playback"})
-print(f"[7] POST /api/chat/tts/generate: status={status} in {elapsed:.3f}s | hash={data.get('hash') if data else None}")
+print(f"[6] POST /api/chat/tts/generate: status={status} in {elapsed:.3f}s | hash={data.get('hash') if data else None}")
 assert status == 200 and data.get("hash") is not None
 timings["tts_generate_s"] = elapsed
 

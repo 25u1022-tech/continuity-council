@@ -41,7 +41,6 @@ from services import (  # noqa: E402
     geo_service,
     import_service,
     mcp_client,
-    moodboard_service,
     nl_parser,
     scene_generator,
     schedule_extractor,
@@ -375,53 +374,6 @@ async def confirm_schedule_import(job_id: str):
     except Exception as exc:
         logger.error("Failed to confirm schedule import job %s: %s", job_id, exc)
         raise HTTPException(500, f"Failed to persist schedule rows: {exc}")
-
-
-@api.get("/locations/{location_id}/moodboard")
-async def get_location_moodboard(
-    location_id: str = Path(..., description="Location ID"),
-    scene_id: Optional[str] = Query(None, description="Optional scene ID for lighting/atmosphere context"),
-):
-    """Get on-demand cinematic mood-board preview metadata and status for a location."""
-    res = await moodboard_service.generate_moodboard(
-        location_id=location_id,
-        timeout=8.0,
-    )
-    if res and res.get("image_base64"):
-        return JSONResponse(
-            status_code=200,
-            content=res,
-        )
-    # 202 Accepted with unavailable status on failure/quota (never 500)
-    return JSONResponse(
-        status_code=202,
-        content={
-            "status": "unavailable",
-            "location_id": location_id,
-            "detail": "AI moodboard preview currently unavailable or cooling down.",
-        },
-    )
-
-
-@api.get("/locations/{location_id}/moodboard/image")
-async def get_location_moodboard_image(
-    location_id: str = Path(..., description="Location ID"),
-):
-    """Get raw image bytes for location moodboard preview."""
-    res = await moodboard_service.get_or_generate_moodboard_image(location_id=location_id, timeout=8.0)
-    if res is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Moodboard image for location '{location_id}' not found or unavailable.",
-        )
-    image_bytes, mime = res
-    return Response(
-        content=image_bytes,
-        media_type=mime,
-        headers={
-            "Cache-Control": "public, max-age=86400",
-        },
-    )
 
 
 @api.get("/productions/{production_id}/studio-cohort")
@@ -966,10 +918,25 @@ async def app_chat_fallback(req: ChatRequest):
     return await chat_endpoint(req)
 
 
+def _cors_origins() -> list[str]:
+    """Build CORS allowed-origins list from environment.
+
+    Priority order:
+    1. ALLOWED_ORIGINS  — new canonical name (comma-separated)
+    2. CORS_ORIGINS     — legacy name kept for backwards compat
+    3. Localhost fallback for local development
+    """
+    for env_var in ("ALLOWED_ORIGINS", "CORS_ORIGINS"):
+        raw = os.environ.get(env_var, "").strip()
+        if raw and raw != "*":
+            return [o.strip() for o in raw.split(",") if o.strip()]
+    return ["http://localhost:3000", "http://localhost:8000"]
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -982,8 +949,9 @@ def _frontend_build_dir() -> FilePath:
 
 
 FRONTEND_BUILD_DIR = _frontend_build_dir()
-if FRONTEND_BUILD_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="static")
+_static_dir = FRONTEND_BUILD_DIR / "static"
+if FRONTEND_BUILD_DIR.is_dir() and _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
     @app.get("/{path:path}")
     async def spa_fallback(path: str):
@@ -1024,3 +992,10 @@ async def _warmup_gemini():
             logger.info("Gemini warmup complete")
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gemini warmup skipped: %s", exc)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

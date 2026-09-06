@@ -126,19 +126,12 @@ for _ in range(3):
 benchmarks["warm_investigation_avg_s"] = sum(sla_runs) / len(sla_runs)
 print(f"    Warm investigation SLA (3 runs): {benchmarks['warm_investigation_avg_s']:.3f}s (SLA <= 2.1s: {benchmarks['warm_investigation_avg_s'] <= 2.1})")
 
-# 6. Recovery Options Page (rank badges, explainability, moodboard)
+# 6. Recovery Options Page (rank badges, explainability)
 opts = case_obj.get("options", []) if case_obj else []
 all_have_justifications = all(bool(o.get("justification")) for o in opts) if opts else False
 has_ranks = all(o.get("rank") is not None for o in opts) if opts else False
-# Test moodboard
-t0 = time.perf_counter()
-status_mb_miss, _, elapsed_mb_miss = get("/api/locations/loc_999/moodboard")
-benchmarks["moodboard_miss_s"] = elapsed_mb_miss
-t0 = time.perf_counter()
-status_mb_hit, data_mb, elapsed_mb_hit = get("/api/locations/loc_002/moodboard")
-benchmarks["moodboard_hit_s"] = elapsed_mb_hit
-print(f"[Feature 6] Recovery Options: options={len(opts)} justifications={all_have_justifications} ranks={has_ranks} moodboard_hit={status_mb_hit} ({elapsed_mb_hit:.3f}s)")
-audit_results["Recovery Options page"] = len(opts) >= 3 and has_ranks and status_mb_hit in (200, 202)
+print(f"[Feature 6] Recovery Options: options={len(opts)} justifications={all_have_justifications} ranks={has_ranks}")
+audit_results["Recovery Options page"] = len(opts) >= 3 and has_ranks
 
 # 7. Decision Ledger & HTML Report Export
 opt_to_approve = opts[0].get("option_id", "opt_001") if opts else "opt_001"

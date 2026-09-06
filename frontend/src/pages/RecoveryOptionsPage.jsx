@@ -26,9 +26,7 @@ import {
   Coins,
   MapPin,
   Info,
-  Sparkles,
 } from "lucide-react";
-import { LocationMoodboardModal } from "../components/LocationMoodboardModal";
 
 export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
   const navigate = useNavigate();
@@ -36,7 +34,6 @@ export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
   const { caseData, error } = useCasePolling(caseId, 2500);
   const [confirming, setConfirming] = useState(null);
   const [approving, setApproving] = useState(false);
-  const [previewLocation, setPreviewLocation] = useState(null);
 
   useEffect(() => {
     if (caseData && onCaseUpdate) onCaseUpdate(caseData);
@@ -149,7 +146,6 @@ export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
               approved={approved}
               isSelected={caseData.approved_option_id === o.option_id}
               onApprove={() => setConfirming(o)}
-              onPreviewLocation={(loc) => setPreviewLocation(loc)}
             />
           ))}
         </div>
@@ -165,14 +161,6 @@ export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
           <MCPCallLog calls={caseData.mcp_calls} connected compact />
         </div>
       </div>
-
-      <LocationMoodboardModal
-        open={Boolean(previewLocation)}
-        onOpenChange={(open) => !open && setPreviewLocation(null)}
-        locationId={previewLocation?.locationId}
-        locationName={previewLocation?.locationName}
-        sceneId={previewLocation?.sceneId}
-      />
 
       <AlertDialog open={!!confirming} onOpenChange={(v) => !v && setConfirming(null)}>
         <AlertDialogContent className="cc-card border border-[var(--cc-border)] p-6">
@@ -212,31 +200,11 @@ export default function RecoveryOptionsPage({ caseId, onCaseUpdate }) {
   );
 }
 
-const OptionCard = ({ option, production, approved, isSelected, onApprove, onPreviewLocation }) => {
+const OptionCard = ({ option, production, approved, isSelected, onApprove }) => {
   const [showChanges, setShowChanges] = useState(false);
   const [showCostBreakdown, setShowCostBreakdown] = useState(false);
 
   const breakdown = option.cost_breakdown?.breakdown || [];
-
-  const locationChange = option.scene_changes?.find(
-    (c) => c.from_location && c.to_location && c.from_location !== c.to_location
-  );
-  const isLocationSwap =
-    option.strategy === "swap_locations" ||
-    Boolean(locationChange) ||
-    Boolean(option.affected_location_id);
-
-  const targetLocationName =
-    locationChange?.to_location ||
-    option.affected_location_id ||
-    production?.locations?.[0]?.name ||
-    "Alternate Filming Location";
-
-  const targetLocationId =
-    locationChange?.to_location ||
-    option.affected_location_id ||
-    production?.locations?.[0]?.location_id ||
-    "loc_002";
 
   return (
     <div
@@ -321,27 +289,6 @@ const OptionCard = ({ option, production, approved, isSelected, onApprove, onPre
 
       {/* Live Signals & Actions Strip */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {/* Moodboard Preview Button for Location Moves */}
-        {/* MOODBOARD HIDDEN — key lacks image-model access
-        {isLocationSwap && onPreviewLocation && (
-          <button
-            type="button"
-            data-testid={`preview-look-btn-${option.option_id}`}
-            onClick={() =>
-              onPreviewLocation({
-                locationId: targetLocationId,
-                locationName: targetLocationName,
-                sceneId: locationChange?.scene_id,
-              })
-            }
-            className="flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-2.5 py-1 text-[11px] font-medium text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)] hover:border-[var(--cc-text-primary)]/40 transition-all shadow-sm"
-          >
-            <Sparkles size={11} className="text-[var(--cc-yellow-dot)]" />
-            <span>Preview look</span>
-          </button>
-        )}
-        */}
-
         {option.weather_summary && (
           <div className="flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-border)] bg-[var(--cc-surface-hover)] px-2.5 py-1 text-[11px] text-[var(--cc-text-secondary)] shadow-sm">
             <CloudRain size={12} className="text-[var(--cc-blue-dot)]" />

@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 690" width="100%" height="100%" style="background:#ffffff; font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;">
+  <defs>
+    <marker id="arrow-grey" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 6 4 L 0 7 z" fill="#6b7280" />
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 6 4 L 0 7 z" fill="#2563eb" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 6 4 L 0 7 z" fill="#7c3aed" />
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 6 4 L 0 7 z" fill="#d97706" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 1 L 6 4 L 0 7 z" fill="#059669" />
+    </marker>
+  </defs>
+
+  <!-- Header -->
+  <text x="450" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#111827">Continuity Council — System Architecture</text>
+  <text x="450" y="52" text-anchor="middle" font-size="12" fill="#6b7280">Google ADK 2.x · ClickHouse Cloud · Gemini 3.6-flash</text>
+
+  <!-- ============================================================ -->
+  <!-- ROW 1: REACT FRONTEND                                        -->
+  <!-- ============================================================ -->
+  <text x="50" y="82" font-size="11" font-weight="700" fill="#2563eb" letter-spacing="0.5px">REACT FRONTEND</text>
+
+  <!-- 4 UI Boxes -->
+  <rect x="50" y="92" width="188" height="52" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+  <text x="144" y="114" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Report Disruption</text>
+  <text x="144" y="130" text-anchor="middle" font-size="11" fill="#6b7280">NL Intake &amp; Call Sheets</text>
+
+  <rect x="254" y="92" width="188" height="52" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+  <text x="348" y="114" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Investigation</text>
+  <text x="348" y="130" text-anchor="middle" font-size="11" fill="#6b7280">Live Multi-Agent Monitor</text>
+
+  <rect x="458" y="92" width="188" height="52" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+  <text x="552" y="114" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Recovery Options</text>
+  <text x="552" y="130" text-anchor="middle" font-size="11" fill="#6b7280">TRD Scoring &amp; Evidence</text>
+
+  <rect x="662" y="92" width="188" height="52" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+  <text x="756" y="114" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Decision Ledger</text>
+  <text x="756" y="130" text-anchor="middle" font-size="11" fill="#6b7280">Immutable SHA-256 Trail</text>
+
+  <!-- Arrow 1: Center-bottom of entire Frontend layer -> Top of FastAPI Box -->
+  <line x1="450" y1="144" x2="450" y2="198" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+  <rect x="402" y="162" width="96" height="18" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="450" y="175" text-anchor="middle" font-size="11" font-weight="500" fill="#6b7280">REST / Polling</text>
+
+  <!-- ============================================================ -->
+  <!-- ROW 2: FASTAPI BACKEND                                       -->
+  <!-- ============================================================ -->
+  <text x="50" y="194" font-size="11" font-weight="700" fill="#4b5563" letter-spacing="0.5px">FASTAPI BACKEND</text>
+
+  <rect x="50" y="202" width="800" height="48" rx="6" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" />
+  <text x="450" y="222" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">FastAPI Application Hub</text>
+  <text x="450" y="238" text-anchor="middle" font-size="11" fill="#6b7280">25 REST Endpoints · SafeQueryBuilder · Hot Session Store · Static SPA Serving</text>
+
+  <!-- Arrow 2: Center-bottom of FastAPI box -> Top of Google ADK Pipeline -->
+  <line x1="450" y1="250" x2="450" y2="304" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)" />
+  <rect x="406" y="268" width="88" height="18" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="450" y="281" text-anchor="middle" font-size="11" font-weight="500" fill="#7c3aed">ADK Runner</text>
+
+  <!-- ============================================================ -->
+  <!-- ROW 3: GOOGLE ADK AGENT PIPELINE                            -->
+  <!-- ============================================================ -->
+  <text x="50" y="298" font-size="11" font-weight="700" fill="#7c3aed" letter-spacing="0.5px">GOOGLE ADK AGENT PIPELINE</text>
+
+  <!-- Stage 1 -->
+  <rect x="50" y="308" width="220" height="142" rx="6" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5" />
+  <text x="160" y="330" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Stage 1: Candidate Gen</text>
+  <text x="160" y="347" text-anchor="middle" font-size="11" fill="#6b7280">Deterministic Schedule Pruning</text>
+  <rect x="65" y="365" width="190" height="68" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="160" y="390" text-anchor="middle" font-size="11" fill="#4b5563">Evaluates moves, swaps &amp; holds</text>
+  <text x="160" y="414" text-anchor="middle" font-size="11" font-weight="600" fill="#7c3aed">Outputs 2–4 candidate slates</text>
+
+  <!-- Arrow 3: Right edge of Stage 1 -> Left edge of Stage 2 -->
+  <line x1="270" y1="379" x2="296" y2="379" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)" />
+
+  <!-- Stage 2 -->
+  <rect x="300" y="308" width="300" height="142" rx="6" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5" />
+  <text x="450" y="330" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Stage 2: 4 Parallel Agents</text>
+  <text x="450" y="347" text-anchor="middle" font-size="11" fill="#6b7280">ADK ParallelAgent (Concurrent Evaluation)</text>
+
+  <!-- 2x2 Agent Grid -->
+  <rect x="312" y="362" width="132" height="34" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="378" y="377" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">Budget Sentinel</text>
+  <text x="378" y="390" text-anchor="middle" font-size="10" fill="#d97706">ClickHouse MCP</text>
+
+  <rect x="456" y="362" width="132" height="34" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="522" y="377" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">Compliance</text>
+  <text x="522" y="390" text-anchor="middle" font-size="10" fill="#dc2626">SAG &amp; Transit Rules</text>
+
+  <rect x="312" y="404" width="132" height="34" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="378" y="419" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">Continuity Memory</text>
+  <text x="378" y="432" text-anchor="middle" font-size="10" fill="#2563eb">Scene Graph DAG</text>
+
+  <rect x="456" y="404" width="132" height="34" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="522" y="419" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">Schedule Optimizer</text>
+  <text x="522" y="432" text-anchor="middle" font-size="10" fill="#7c3aed">Gemini Polish</text>
+
+  <!-- Arrow 4: Right edge of Stage 2 -> Left edge of Stage 3 -->
+  <line x1="600" y1="379" x2="626" y2="379" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arrow-purple)" />
+
+  <!-- Stage 3 -->
+  <rect x="630" y="308" width="220" height="142" rx="6" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5" />
+  <text x="740" y="330" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Stage 3: Synthesis</text>
+  <text x="740" y="347" text-anchor="middle" font-size="11" fill="#6b7280">70% Rate Card + 30% History</text>
+  <rect x="645" y="365" width="190" height="68" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="740" y="390" text-anchor="middle" font-size="11" font-weight="600" fill="#059669">TRD Utility Scoring</text>
+  <text x="740" y="414" text-anchor="middle" font-size="11" fill="#4b5563">Executive justification brief</text>
+
+  <!-- Auditor (Post-Approval) -->
+  <rect x="630" y="464" width="220" height="42" rx="6" fill="#f0fdf4" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 3" />
+  <text x="740" y="482" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">Auditor Agent (Post-Approval)</text>
+  <text x="740" y="497" text-anchor="middle" font-size="10.5" fill="#059669">SHA-256 Cryptographic Ledger Commit</text>
+
+  <line x1="740" y1="450" x2="740" y2="460" stroke="#059669" stroke-width="1.2" stroke-dasharray="2 2" marker-end="url(#arrow-green)" />
+
+  <!-- Arrow 5: Budget Sentinel -> ClickHouse Cloud (labeled "MCP stdio") -->
+  <path d="M 378 450 L 378 518 L 110 518 L 110 554" fill="none" stroke="#d97706" stroke-width="1.5" marker-end="url(#arrow-amber)" />
+  <rect x="210" y="509" width="70" height="18" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="245" y="522" text-anchor="middle" font-size="11" font-weight="600" fill="#d97706">MCP stdio</text>
+
+  <!-- Arrow 6: Stage 3 Synthesis -> Open-Meteo & ECB (labeled "Live APIs") -->
+  <line x1="552" y1="450" x2="552" y2="554" stroke="#059669" stroke-width="1.5" marker-end="url(#arrow-green)" />
+  <rect x="522" y="482" width="60" height="18" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="552" y="495" text-anchor="middle" font-size="11" font-weight="600" fill="#059669">Live APIs</text>
+
+  <!-- Arrow 7: Auditor Agent -> ClickHouse Cloud (labeled "TLS direct") -->
+  <path d="M 700 506 L 700 534 L 180 534 L 180 554" fill="none" stroke="#059669" stroke-width="1.5" marker-end="url(#arrow-green)" />
+  <rect x="408" y="525" width="76" height="18" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" />
+  <text x="446" y="538" text-anchor="middle" font-size="11" font-weight="600" fill="#059669">TLS direct</text>
+
+  <!-- ============================================================ -->
+  <!-- ROW 4: DATA & EXTERNAL SERVICES                              -->
+  <!-- ============================================================ -->
+  <text x="50" y="550" font-size="11" font-weight="700" fill="#d97706" letter-spacing="0.5px">DATA &amp; EXTERNAL SERVICES</text>
+
+  <!-- 4 Data Boxes -->
+  <rect x="50" y="560" width="188" height="56" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" />
+  <text x="144" y="582" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">ClickHouse Cloud</text>
+  <text x="144" y="600" text-anchor="middle" font-size="11" fill="#6b7280">200k Disruption Benchmarks</text>
+
+  <rect x="254" y="560" width="188" height="56" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+  <text x="348" y="582" text-anchor="middle" font-size="13" font-weight="600" fill="#1e40af">Gemini 3.6-flash</text>
+  <text x="348" y="600" text-anchor="middle" font-size="11" fill="#6b7280">Multimodal Vision &amp; Tools</text>
+
+  <rect x="458" y="560" width="188" height="56" rx="6" fill="#f0fdf4" stroke="#059669" stroke-width="1.5" />
+  <text x="552" y="582" text-anchor="middle" font-size="13" font-weight="600" fill="#065f46">Open-Meteo &amp; ECB</text>
+  <text x="552" y="600" text-anchor="middle" font-size="11" fill="#6b7280">Weather Risk &amp; FX Rates</text>
+
+  <rect x="662" y="560" width="188" height="56" rx="6" fill="#f0fdf4" stroke="#059669" stroke-width="1.5" />
+  <text x="756" y="582" text-anchor="middle" font-size="13" font-weight="600" fill="#065f46">World Bank &amp; OSM</text>
+  <text x="756" y="600" text-anchor="middle" font-size="11" fill="#6b7280">GDP-PPP &amp; Transit Limits</text>
+</svg>

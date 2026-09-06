@@ -1,0 +1,25 @@
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/continuity-council:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/continuity-council:latest'
+      - '.'
+
+  # Push both tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/continuity-council:$COMMIT_SHA']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/continuity-council:latest']
+
+images:
+  - 'gcr.io/$PROJECT_ID/continuity-council:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/continuity-council:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+

@@ -14,7 +14,7 @@ if not exist "%ROOT%frontend\node_modules" (
   exit /b 1
 )
 
-start "Continuity Council Backend" cmd /k "cd /d "%ROOT%backend" ^&^& .venv\Scripts\python.exe -m uvicorn server:app --host 127.0.0.1 --port 8000 --reload"
+start "Continuity Council Backend" cmd /k "cd /d "%ROOT%backend" ^&^& set PORT=8000 ^&^& .venv\Scripts\python.exe -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload"
 start "Continuity Council Frontend" cmd /k "cd /d "%ROOT%frontend" ^&^& corepack yarn start"
 
 echo Backend: http://localhost:8000

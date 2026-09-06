@@ -108,15 +108,6 @@ export const getScheduleImportJob = (jobId) => request(`/imports/${jobId}`);
 export const confirmScheduleImport = (jobId) =>
   request(`/imports/${jobId}/confirm`, { method: "POST" });
 
-export const getLocationMoodboard = (locationId, sceneId) => {
-  const qs = sceneId ? `?scene_id=${encodeURIComponent(sceneId)}` : "";
-  return request(`/locations/${encodeURIComponent(locationId)}/moodboard${qs}`);
-};
-
-export const getLocationMoodboardImageUrl = (locationId) => {
-  return `${API}/locations/${encodeURIComponent(locationId)}/moodboard/image`;
-};
-
 export const getCase = (caseId) => request(`/cases/${caseId}`);
 export const approveOption = (caseId, optionId, approvedBy = "producer") =>
   request(`/cases/${caseId}/approve`, {
