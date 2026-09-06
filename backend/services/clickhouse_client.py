@@ -83,6 +83,12 @@ async def _run(fn, *args, **kwargs):
         return await asyncio.to_thread(fn, *args, **kwargs)
 
 
+async def init_client() -> None:
+    """Eagerly initialize the ClickHouse client at startup."""
+    if is_configured():
+        await _run(_get_client)
+
+
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
@@ -386,13 +392,32 @@ async def create_production(
             )
 
     await _run(_create)
+    invalidate_bundle_cache(production["production_id"])
     _tick(f"INSERT production · {production['production_id']}", len(scenes))
 
 
 # ---------------------------------------------------------------------------
 # Production bundle (schedule + availability, with schedule_changes overlay)
 # ---------------------------------------------------------------------------
-async def fetch_production_bundle(production_id: str) -> Optional[Dict[str, Any]]:
+_BUNDLE_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_BUNDLE_CACHE_TTL = 30.0  # seconds
+
+
+def invalidate_bundle_cache(production_id: Optional[str] = None) -> None:
+    if production_id:
+        _BUNDLE_CACHE.pop(production_id, None)
+    else:
+        _BUNDLE_CACHE.clear()
+
+
+async def fetch_production_bundle(production_id: str, bypass_cache: bool = False) -> Optional[Dict[str, Any]]:
+    if not bypass_cache:
+        import copy as _copy
+        import time as _time
+        entry = _BUNDLE_CACHE.get(production_id)
+        if entry and (_time.time() - entry[0]) < _BUNDLE_CACHE_TTL:
+            return _copy.deepcopy(entry[1])
+
     def _fetch():
         c = _get_client()
         db = _db()
@@ -510,7 +535,12 @@ async def fetch_production_bundle(production_id: str) -> Optional[Dict[str, Any]
             "cast_availability": cast_availability,
         }
 
-    return await _run(_fetch)
+    res = await _run(_fetch)
+    if res is not None:
+        import copy as _copy
+        import time as _time
+        _BUNDLE_CACHE[production_id] = (_time.time(), _copy.deepcopy(res))
+    return res
 
 
 async def get_current_schedule(production_id: str) -> Optional[Dict[str, Any]]:
@@ -655,6 +685,7 @@ async def upsert_extracted_schedule(
         }
 
     res = await _run(_upsert)
+    invalidate_bundle_cache(production_id)
     _tick(f"UPSERT schedule · {production_id}", len(scenes))
     return res
 
@@ -705,6 +736,7 @@ async def insert_decision(decision_row: Dict[str, Any]) -> None:
             ],
         )
     await _run(_ins)
+    invalidate_bundle_cache(decision_row.get("production_id"))
     _tick("INSERT decision_ledger", 1)
 
 
@@ -783,6 +815,7 @@ async def update_production_studio(production_id: str, studio_id: str) -> None:
         )
     try:
         await _run(_update)
+        invalidate_bundle_cache(production_id)
     except Exception as exc:  # noqa: BLE001
         logger.warning("update_production_studio skipped: %s", exc)
 
@@ -811,6 +844,7 @@ async def reset_demo_events(production_id: Optional[str] = None) -> None:
                 c.command(f"TRUNCATE TABLE {db}.{tbl}")
 
     await _run(_reset)
+    invalidate_bundle_cache(production_id)
     scope = production_id or "all"
     _tick(f"Reset event tables · {scope}", 3)
 

@@ -279,6 +279,7 @@ class CaseState(BaseModel):
     decision_id: str = ""
     error: str = ""
     llm_mode: str = "gemini"  # "gemini" | "deterministic" (quota fallback)
+    meta: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)
 
     def touch_stage(self, stage: str) -> None:

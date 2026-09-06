@@ -92,12 +92,11 @@ export default function ReportDisruptionPage({ setActiveCaseId }) {
     if (!selectedId) return;
     setLoading(true);
     setLoadError(null);
-    getHealth()
-      .then((health) => {
-        if (!health?.clickhouse?.connected) throw new Error("ClickHouse Cloud is not connected. Add credentials to load this production.");
-        return getProduction(selectedId);
-      })
-      .then((b) => {
+    Promise.all([getHealth(), getProduction(selectedId)])
+      .then(([health, b]) => {
+        if (!health?.clickhouse?.connected) {
+          throw new Error("ClickHouse Cloud is not connected. Add credentials to load this production.");
+        }
         setBundle(b);
         setForm((f) => {
           const castOk = b.cast_members?.some((c) => c.cast_id === f.affected_cast_id);

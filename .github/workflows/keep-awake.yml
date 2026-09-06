@@ -1,0 +1,22 @@
+name: Keep Cloud Run Awake
+
+on:
+  schedule:
+    # Ping every 5 minutes to prevent cold starts
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Cloud Run Health Endpoint
+        run: |
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}s" https://continuity-council-254080656276.us-central1.run.app/api/health)
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Cloud Run health check returned HTTP $STATUS"
+            exit 1
+          fi
+          echo "Cloud Run is warm and responding."

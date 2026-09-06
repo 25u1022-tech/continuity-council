@@ -10,10 +10,12 @@ Composed using Google Agent Development Kit (ADK):
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
 import logging
 import os
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 from google.adk import Agent, Runner
 from google.adk.agents.base_agent import BaseAgent
@@ -27,9 +29,9 @@ from google.genai import types
 
 import case_store
 from agents import budget_sentinel, compliance, continuity_memory, schedule_optimizer
-from models import CaseState, RecoveryOption
+from models import CaseState, EvidenceRow, MCPCall, RecoveryOption
 from scoring import score_options
-from services import clickhouse_client, gemini_client, justification_service
+from services import clickhouse_client, gemini_client, justification_service, mcp_client
 
 logger = logging.getLogger("continuity.agents.orchestrator")
 
@@ -361,6 +363,82 @@ def create_orchestrator_agent(model_name: Optional[str] = None) -> SequentialAge
 
 
 # ---------------------------------------------------------------------------
+# Investigation Result Cache (TTL 10m: instant second view)
+# ---------------------------------------------------------------------------
+_INVESTIGATION_CACHE: Dict[Tuple[str, str], Tuple[float, Dict[str, Any]]] = {}
+_INVESTIGATION_CACHE_TTL = 600.0  # 10 minutes
+
+
+def compute_disruption_hash(disruption: Any) -> str:
+    raw = (
+        f"{disruption.disruption_type}:{disruption.affected_day}:"
+        f"{getattr(disruption, 'affected_cast_id', '') or ''}:"
+        f"{getattr(disruption, 'affected_location_id', '') or ''}:{disruption.severity}"
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def get_cached_investigation(production_id: str, disruption: Any) -> Optional[Dict[str, Any]]:
+    d_hash = compute_disruption_hash(disruption)
+    key = (production_id, d_hash)
+    entry = _INVESTIGATION_CACHE.get(key)
+    if entry and (time.time() - entry[0]) < _INVESTIGATION_CACHE_TTL:
+        return copy.deepcopy(entry[1])
+    return None
+
+
+def store_cached_investigation(production_id: str, disruption: Any, case: CaseState) -> None:
+    d_hash = compute_disruption_hash(disruption)
+    key = (production_id, d_hash)
+    cached_data = {
+        "options": [o.model_dump() for o in case.options],
+        "evidence_rows": [e.model_dump() for e in case.evidence_rows],
+        "evidence_narrative": case.evidence_narrative,
+        "evidence_footnote": case.evidence_footnote,
+        "evidence_cohort": case.evidence_cohort,
+        "studio_id": case.studio_id,
+        "recommendation_rationale": case.recommendation_rationale,
+        "affected_scene_ids": list(case.affected_scene_ids),
+        "mcp_calls": [m.model_dump() for m in case.mcp_calls],
+        "llm_mode": case.llm_mode,
+    }
+    _INVESTIGATION_CACHE[key] = (time.time(), cached_data)
+
+
+def hydrate_case_from_cache(case: CaseState, cached: Dict[str, Any], elapsed_ms: int = 0) -> None:
+    """Hydrates a CaseState instantly from a warm cached investigation."""
+    case.options = [RecoveryOption(**o) for o in cached.get("options", [])]
+    case.evidence_rows = [EvidenceRow(**e) for e in cached.get("evidence_rows", [])]
+    case.evidence_narrative = cached.get("evidence_narrative", "")
+    case.evidence_footnote = cached.get("evidence_footnote", "")
+    case.evidence_cohort = cached.get("evidence_cohort", "global")
+    case.studio_id = cached.get("studio_id", "global")
+    case.recommendation_rationale = cached.get("recommendation_rationale", "")
+    case.affected_scene_ids = list(cached.get("affected_scene_ids", []))
+    case.mcp_calls = [MCPCall(**m) for m in cached.get("mcp_calls", [])]
+    case.llm_mode = cached.get("llm_mode", "gemini")
+    case.status = "options_ready"
+    for k in case.agents:
+        case.agent_complete(k, "Loaded from warm investigation cache (TTL 10m)")
+    case.touch_stage("AGENTS_INVESTIGATING")
+    case.touch_stage("OPTIONS_READY")
+    case.touch_stage("PRODUCER_REVIEWING")
+    case.meta = {
+        "cached": True,
+        "timing": {
+            "mcp_connect_ms": 0,
+            "per_agent": {k: 0 for k in ["schedule_optimizer", "budget_sentinel", "continuity_memory", "compliance"]},
+            "synthesis_ms": 0,
+            "total_ms": elapsed_ms,
+        },
+        "mcp_connect": 0.0,
+        "per_agent": {k: 0 for k in ["schedule_optimizer", "budget_sentinel", "continuity_memory", "compliance"]},
+        "synthesis": 0.0,
+        "total": round(elapsed_ms / 1000.0, 3),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Production Orchestrator Investigation Runner (Genuinely Driven by ADK Runner)
 # ---------------------------------------------------------------------------
 async def run_investigation(case_id: str) -> None:
@@ -381,9 +459,27 @@ async def run_investigation(case_id: str) -> None:
 
 async def _run(case: CaseState) -> None:
     t_start = time.perf_counter()
+
+    # Check 10-min in-memory investigation cache first (instant second view)
+    cached = get_cached_investigation(case.production_id, case.disruption)
+    if cached is not None:
+        t_hit_ms = int((time.perf_counter() - t_start) * 1000)
+        hydrate_case_from_cache(case, cached, t_hit_ms)
+        logger.info(
+            "INVESTIGATION STAGE TIMINGS [%s]: total=%.2fs | mcp_connect=0.00s | per_agent=%s | synthesis=0.00s (WARM CACHE HIT)",
+            case.case_id, t_hit_ms / 1000.0, case.meta["per_agent"],
+        )
+        return
+
     case.status = "investigating"
     case.touch_stage("AGENTS_INVESTIGATING")
     case.agent_start("orchestrator", "Loading current schedule from ClickHouse…")
+
+    # Warm MCP session if needed and measure connect time
+    t_mcp0 = time.perf_counter()
+    if not mcp_client.is_mcp_warm():
+        await mcp_client.start_mcp_client()
+    mcp_connect_ms = int((time.perf_counter() - t_mcp0) * 1000)
 
     t_fetch_start = time.perf_counter()
     bundle = await clickhouse_client.get_current_schedule(case.production_id)
@@ -440,14 +536,6 @@ async def _run(case: CaseState) -> None:
         author = getattr(event, "author", "unknown")
         logger.debug("[ADK Event] author=%s", author)
 
-    t_total = time.perf_counter() - t_start
-    mcp_total = sum(c.latency_ms for c in case.mcp_calls) / 1000.0
-
-    logger.info(
-        "INVESTIGATION TIMING [%s]: total=%.2fs | schedule_fetch=%.2fs | mcp_sum=%.2fs | ranked_options=%d",
-        case.case_id, t_total, t_fetch, mcp_total, len(case.options),
-    )
-
     if case.options and any(not getattr(o, "justification", "") for o in case.options):
         try:
             await justification_service.generate_justifications(case.options, case.evidence_rows)
@@ -458,3 +546,38 @@ async def _run(case: CaseState) -> None:
     case.llm_mode = "deterministic" if gemini_client.quota_hit() or not gemini_client.is_configured() else "gemini"
     case.touch_stage("OPTIONS_READY")
     case.touch_stage("PRODUCER_REVIEWING")
+
+    # Measure per-agent and synthesis timings
+    per_agent = {
+        k: (case.agents[k].duration_ms if case.agents.get(k) and case.agents[k].duration_ms is not None else 0)
+        for k in ["schedule_optimizer", "budget_sentinel", "continuity_memory", "compliance"]
+    }
+    synthesis_ms = (
+        case.agents["orchestrator"].duration_ms
+        if case.agents.get("orchestrator") and case.agents["orchestrator"].duration_ms is not None
+        else 0
+    )
+    t_total = time.perf_counter() - t_start
+    total_ms = int(t_total * 1000)
+
+    case.meta = {
+        "cached": False,
+        "timing": {
+            "mcp_connect_ms": mcp_connect_ms,
+            "per_agent": per_agent,
+            "synthesis_ms": synthesis_ms,
+            "total_ms": total_ms,
+        },
+        "mcp_connect": round(mcp_connect_ms / 1000.0, 3),
+        "per_agent": per_agent,
+        "synthesis": round(synthesis_ms / 1000.0, 3),
+        "total": round(t_total, 3),
+    }
+
+    # Store in 10-min cache
+    store_cached_investigation(case.production_id, case.disruption, case)
+
+    logger.info(
+        "INVESTIGATION STAGE TIMINGS [%s]: total=%.2fs | mcp_connect=%dms | per_agent=%s | synthesis=%dms | ranked_options=%d",
+        case.case_id, t_total, mcp_connect_ms, per_agent, synthesis_ms, len(case.options),
+    )

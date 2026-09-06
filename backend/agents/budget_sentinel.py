@@ -407,6 +407,30 @@ async def calibrate_option_economics(
         if case.evidence_rows else 25000.0
     )
 
+    # Pre-fetch unique weather and FX signals concurrently across all options
+    unique_coords = set()
+    unique_currencies = set()
+    for opt in options:
+        t_id = ""
+        for ch in opt.scene_changes:
+            if ch.to_location:
+                t_id = ch.to_location
+                break
+        if not t_id and bundle["locations"]:
+            t_id = bundle["locations"][0]["location_id"]
+        l_inf = loc_dict.get(t_id, {})
+        unique_coords.add((l_inf.get("lat", 0.0), l_inf.get("lon", 0.0)))
+        unique_currencies.add(l_inf.get("currency", "USD"))
+
+    weather_keys = list(unique_coords)
+    fx_keys = list(unique_currencies)
+    w_results, fx_results = await asyncio.gather(
+        asyncio.gather(*(get_weather_risk(lat, lon) for lat, lon in weather_keys)),
+        asyncio.gather(*(get_exchange_rate(cur, "USD") for cur in fx_keys)),
+    )
+    weather_map = dict(zip(weather_keys, w_results))
+    fx_map = dict(zip(fx_keys, fx_results))
+
     for opt in options:
         lines: List[CostLineItem] = []
         fx_applied = 1.0
@@ -439,10 +463,9 @@ async def calibrate_option_economics(
         adj_stage_rate = int(round(stage_day_rate * loc_geo_mult))
         adj_permit_rate = int(round(permit_day_rate * loc_geo_mult))
 
-        # 1. Fetch live signals in parallel (Weather & FX)
-        w_task = get_weather_risk(loc_lat, loc_lon)
-        fx_task = get_exchange_rate(loc_curr, "USD")
-        w_res, fx_res = await asyncio.gather(w_task, fx_task)
+        # 1. Retrieve pre-fetched live signals (Weather & FX)
+        w_res = weather_map.get((loc_lat, loc_lon), {"risk_score": 0, "rain_risk_pct": 0, "source": "Open-Meteo (CC-BY 4.0)"})
+        fx_res = fx_map.get(loc_curr, {"rate": 1.0, "source": "ECB / Frankfurter"})
 
         weather_risk_score = w_res["risk_score"]
         weather_summary = f"{w_res['rain_risk_pct']}% historical rain risk: {w_res['source']}"

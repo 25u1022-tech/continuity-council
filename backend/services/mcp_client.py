@@ -132,6 +132,9 @@ class PersistentMCPClient:
         self._session = None
         self._query_tool = None
 
+    def is_warm(self) -> bool:
+        return self._session is not None
+
     async def warm(self) -> None:
         """Pre-warm connection at app startup."""
         async with self._lock:
@@ -182,6 +185,11 @@ async def start_mcp_client() -> None:
 async def stop_mcp_client() -> None:
     """Cleanly close persistent MCP client."""
     await _POOL.close()
+
+
+def is_mcp_warm() -> bool:
+    """Return whether the persistent MCP client session is currently active and warm."""
+    return _POOL.is_warm()
 
 
 async def mcp_run_query(sql: str, timeout: float = 15.0) -> Dict[str, Any]:

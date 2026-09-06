@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import asynccontextmanager
 import logging
 import os
 from pathlib import Path as FilePath
+import time
 
 import fastapi
 from dotenv import load_dotenv
@@ -57,7 +59,54 @@ logger = logging.getLogger("continuity.api")
 PRODUCTION_ID_PATTERN = r"^[a-zA-Z0-9_\-]{3,64}$"
 CASE_ID_PATTERN = r"^[a-zA-Z0-9_\-]{3,64}$"
 
-app = FastAPI(title="Continuity Council API", version="1.0.0")
+
+async def _warmup_gemini():
+    import tempfile
+    marker = FilePath(tempfile.gettempdir()) / ".gemini_warmup"
+    try:
+        if marker.exists() and (time.time() - marker.stat().st_mtime) < 900:
+            return
+        if gemini_client.is_configured():
+            marker.touch()
+            await gemini_client.generate_text("ok", timeout=10, temperature=0)
+            logger.info("Gemini warmup complete")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Gemini warmup skipped: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    t0 = time.perf_counter()
+    logger.info(
+        "Continuity Council lifespan starting — ClickHouse configured: %s | Gemini configured: %s",
+        clickhouse_client.is_configured(), gemini_client.is_configured(),
+    )
+    # 1. Eagerly init ClickHouse client & schema
+    t_ch = time.perf_counter()
+    await clickhouse_client.init_client()
+    await clickhouse_client.ensure_schema()
+    ch_ms = int((time.perf_counter() - t_ch) * 1000)
+    logger.info("Lifespan: ClickHouse eager init complete in %dms", ch_ms)
+
+    # 2. Warm MCP session (persistent singleton)
+    t_mcp = time.perf_counter()
+    await mcp_client.start_mcp_client()
+    mcp_ms = int((time.perf_counter() - t_mcp) * 1000)
+    logger.info("Lifespan: MCP session pre-warm complete in %dms (warm=%s)", mcp_ms, mcp_client.is_mcp_warm())
+
+    # 3. Warm Gemini client
+    t_gem = time.perf_counter()
+    await _warmup_gemini()
+    gem_ms = int((time.perf_counter() - t_gem) * 1000)
+    logger.info("Lifespan: Gemini pre-warm complete in %dms", gem_ms)
+
+    logger.info("Continuity Council startup complete in %dms", int((time.perf_counter() - t0) * 1000))
+    yield
+    logger.info("Continuity Council shutting down...")
+    await mcp_client.stop_mcp_client()
+
+
+app = FastAPI(title="Continuity Council API", version="1.0.0", lifespan=lifespan)
 api = APIRouter(prefix="/api")
 
 
@@ -67,22 +116,31 @@ async def root():
 
 
 @api.get("/health")
-async def health():
+async def health(response: Response):
+    response.headers["Cache-Control"] = "no-store"
     ch = await clickhouse_client.ping()
+    mcp_warm = mcp_client.is_mcp_warm()
     return {
         "status": "ok" if ch.get("connected") else "degraded",
+        "mcp_warm": mcp_warm,
         "clickhouse": ch,
         "gemini": {
             "configured": gemini_client.is_configured(),
             "model": gemini_client.model_name(),
         },
-        "mcp": {"server": "mcp-clickhouse", "transport": "stdio", "read_only": True},
+        "mcp": {
+            "server": "mcp-clickhouse",
+            "transport": "stdio",
+            "read_only": True,
+            "warm": mcp_warm,
+        },
     }
 
 
 @api.get("/productions")
-async def list_productions():
+async def list_productions(response: Response):
     """All productions for the switcher + management UI."""
+    response.headers["Cache-Control"] = "public, max-age=60"
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured. Add credentials to backend/.env.")
     try:
@@ -255,7 +313,10 @@ async def create_production(req: CreateProductionRequest):
 @api.get("/productions/{production_id}")
 async def get_production(
     production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    response: Response = None,
 ):
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60"
     if not clickhouse_client.is_configured():
         raise HTTPException(503, "ClickHouse is not configured. Add credentials to backend/.env.")
     try:
@@ -278,6 +339,51 @@ async def get_production(
         if c.production_id == production_id
     ]
     return bundle
+
+
+@api.get("/productions/{production_id}/locations")
+async def get_production_locations(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    response: Response = None,
+):
+    """Stable production locations list with public edge caching."""
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60"
+    bundle = await clickhouse_client.fetch_production_bundle(production_id)
+    if bundle is None:
+        raise HTTPException(404, f"Production {production_id} not found.")
+    return {"production_id": production_id, "locations": bundle.get("locations", [])}
+
+
+@api.get("/productions/{production_id}/calendar")
+async def get_production_calendar(
+    production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    response: Response = None,
+):
+    """Stable production calendar scenes with public edge caching."""
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60"
+    bundle = await clickhouse_client.fetch_production_bundle(production_id)
+    if bundle is None:
+        raise HTTPException(404, f"Production {production_id} not found.")
+    return {"production_id": production_id, "scenes": bundle.get("scenes", [])}
+
+
+@api.get("/rate-cards")
+@api.get("/productions/{production_id}/rate-cards")
+async def get_rate_cards_endpoint(
+    production_id: Optional[str] = None,
+    tier: str = "mid",
+    response: Response = None,
+):
+    """Stable macroeconomic industry rate cards with public edge caching."""
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60"
+    if production_id:
+        bundle = await clickhouse_client.fetch_production_bundle(production_id)
+        if bundle and bundle.get("production"):
+            tier = bundle["production"].get("tier", "mid")
+    return {"tier": tier, "rate_cards": await clickhouse_client.fetch_rate_cards(tier)}
 
 
 @api.get("/templates/disruption-history.csv")
@@ -379,8 +485,11 @@ async def confirm_schedule_import(job_id: str):
 @api.get("/productions/{production_id}/studio-cohort")
 async def get_studio_cohort(
     production_id: str = Path(..., pattern=PRODUCTION_ID_PATTERN, description="Production ID"),
+    response: Response = None,
 ):
     """Get current studio historical cohort sample size and blending weight."""
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60"
     bundle = await clickhouse_client.fetch_production_bundle(production_id)
     if bundle is None:
         raise HTTPException(404, f"Production {production_id} not found.")
@@ -470,15 +579,22 @@ async def report_disruption(report: DisruptionReport):
     case = new_case(report)
     case_store.put(case)
 
+    # Check 10-minute in-memory investigation cache for instant warm return
+    from agents import orchestrator
+    cached = orchestrator.get_cached_investigation(case.production_id, case.disruption)
+    if cached is not None:
+        orchestrator.hydrate_case_from_cache(case, cached, 0)
+        logger.info("Case %s created (instant warm cache hit)", case.case_id)
+    else:
+        asyncio.create_task(orchestrator.run_investigation(case.case_id))
+        logger.info("Case %s created for %s (async investigation started)", case.case_id, report.disruption_type)
+
     # Append the case event to ClickHouse (non-blocking for UX, but attempted immediately)
     try:
         await clickhouse_client.insert_disruption_case(case)
     except Exception as exc:  # noqa: BLE001
         logger.warning("disruption_cases insert failed (continuing): %s", exc)
 
-    from agents import orchestrator
-    asyncio.create_task(orchestrator.run_investigation(case.case_id))
-    logger.info("Case %s created for %s", case.case_id, report.disruption_type)
     return {"case_id": case.case_id, "status": case.status}
 
 
@@ -958,40 +1074,6 @@ if FRONTEND_BUILD_DIR.is_dir() and _static_dir.is_dir():
         if path.startswith("api/") or path in {"api", "docs", "redoc", "openapi.json"}:
             raise HTTPException(404, "Not found")
         return FileResponse(FRONTEND_BUILD_DIR / "index.html")
-
-
-@app.on_event("startup")
-async def startup():
-    logger.info(
-        "Continuity Council starting — ClickHouse configured: %s | Gemini configured: %s",
-        clickhouse_client.is_configured(), gemini_client.is_configured(),
-    )
-    # Ensure post-seed schema additions (e.g. productions.director) exist.
-    await clickhouse_client.ensure_schema()
-    # Warm up persistent MCP client and Gemini in background
-    asyncio.create_task(mcp_client.start_mcp_client())
-    asyncio.create_task(_warmup_gemini())
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await mcp_client.stop_mcp_client()
-
-
-async def _warmup_gemini():
-    import tempfile
-    marker = FilePath(tempfile.gettempdir()) / ".gemini_warmup"
-    try:
-        import time as _time
-
-        if marker.exists() and (_time.time() - marker.stat().st_mtime) < 900:
-            return
-        if gemini_client.is_configured():
-            marker.touch()
-            await gemini_client.generate_text("ok", timeout=10, temperature=0)
-            logger.info("Gemini warmup complete")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Gemini warmup skipped: %s", exc)
 
 
 if __name__ == "__main__":

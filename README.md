@@ -253,6 +253,48 @@ Follow these steps for the optimal evaluation flow:
 
 ---
 
+## 🚀 Cloud Run Deployment & Low-Latency Architecture
+
+The production backend runs as a high-performance containerized service on **Google Cloud Run** at:
+`https://continuity-council-254080656276.us-central1.run.app`
+
+### Deployment Command & Flags
+
+Deploy or update the Cloud Run service with the following production flags:
+
+```bash
+gcloud run deploy continuity-council \
+  --image gcr.io/<PROJECT_ID>/continuity-council:latest \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --min-instances 1 \
+  --cpu 2 \
+  --memory 2Gi \
+  --cpu-boost \
+  --set-env-vars CLICKHOUSE_HOST=$CLICKHOUSE_HOST,CLICKHOUSE_PASSWORD=$CLICKHOUSE_PASSWORD,GEMINI_API_KEY=$GEMINI_API_KEY
+```
+
+**Key Flag Rationale:**
+- `--min-instances 1`: Keeps at least one container warm to eliminate cold starts for real-time film crew dispatches.
+- `--cpu 2` & `--memory 2Gi`: Provides the necessary compute headroom for multi-agent concurrency and vector/in-memory analytics.
+- `--cpu-boost`: Accelerates container startup time and eager initialization of background workers.
+- `--allow-unauthenticated`: Enables direct REST API access from the Vercel-hosted React single-page app.
+
+### Geographic Latency Analysis & Optimization
+
+- **Geographic Disparity**: The ClickHouse Cloud server is hosted in **`ap-south-1` (Mumbai, India)**, whereas the Cloud Run service is located in **`us-central1` (Iowa, USA)**. The trans-continental round-trip time (RTT) between Iowa and Mumbai is approximately ~220ms–280ms.
+- **The Challenge**: A complete production schedule fetch (`fetch_production_bundle`) requires 7 distinct relational queries. Executed sequentially over trans-oceanic TLS, this introduced ~1.9s–2.2s of network latency alone.
+- **The High-Performance Solution**:
+  1. **Lifespan Eager Pre-Warming**: FastAPI `lifespan` handler pre-establishes ClickHouse TLS connections, starts the FastMCP ClickHouse stdio singleton, and pre-warms the Gemini API client during container boot.
+  2. **In-Memory Bundle Cache**: 30-second TTL cache on `fetch_production_bundle` drops repeat schedule reads from >2,100ms to **<1ms**, with automatic invalidation on any schedule or studio mutation.
+  3. **Concurrent Signal Gathering**: Specialist agents utilize `asyncio.gather` to execute Open-Meteo weather risk evaluations and Frankfurter ECB currency conversions in parallel.
+  4. **Investigation Slate Cache**: 10-minute cache keyed on `(production_id, disruption_hash)` instantly hydrates previously analyzed disruption scenarios in **<10ms**.
+  5. **Edge & Browser Caching**: Stable read endpoints (`/api/productions`, `/api/rate-cards`, locations, calendar) return `Cache-Control: public, max-age=60`, while `/api/health` specifies `Cache-Control: no-store`.
+  6. **Automated Keep-Awake**: A GitHub Actions workflow (`.github/workflows/keep-awake.yml`) pings `/api/health` every 5 minutes to prevent container throttling.
+
+---
+
 ## 🧪 Automated Testing & Verification
 
 Continuity Council includes extensive automated backend and frontend test suites.

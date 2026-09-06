@@ -15,13 +15,12 @@ export const ProductionProvider = ({ children }) => {
 
   const refresh = useCallback(async () => {
     try {
-      const health = await getHealth();
+      const [health, data] = await Promise.all([getHealth(), listProductions()]);
       if (!health?.clickhouse?.connected) {
         setProductions([]);
         setError(null);
         return [];
       }
-      const data = await listProductions();
       const list = data?.productions || [];
       setProductions(list);
       setError(null);
