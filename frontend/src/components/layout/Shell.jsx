@@ -58,14 +58,11 @@ export const Shell = ({ children, activeCase }) => {
 
   useEffect(() => {
     let alive = true;
-    const load = () => getHealth().then((h) => alive && setHealth(h)).catch(() => {});
-    load();
-    const t = setInterval(load, 15000);
+    getHealth().then((h) => alive && setHealth(h)).catch(() => {});
     return () => {
       alive = false;
-      clearInterval(t);
     };
-  }, [location.pathname]);
+  }, []);
 
   const chConnected = health?.clickhouse?.connected;
 
