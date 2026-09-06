@@ -34,9 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://continuity-council-254080656276.us-central1.run.app
+      url: https://continuity-council-254080656276.asia-south1.run.app
     steps:
       - name: Check Cloud Run Deployment Health
         run: |
-          curl -f -s -S https://continuity-council-254080656276.us-central1.run.app/api/health
+          curl -f -s -S https://continuity-council-254080656276.asia-south1.run.app/api/health
           echo "Cloud Run deployment is live at https://continuity-council-254080656276.us-central1.run.app"
